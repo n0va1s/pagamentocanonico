@@ -1,0 +1,180 @@
+services:
+
+    # -------------------------------------------------------------------------
+    # Laravel Application
+    # -------------------------------------------------------------------------
+    laravel.test:
+        build:
+            context: './vendor/laravel/sail/runtimes/8.5'
+            dockerfile: Dockerfile
+            args:
+                WWWGROUP: '${WWWGROUP}'
+        image: 'sail-8.5/app'
+        extra_hosts:
+            - 'host.docker.internal:host-gateway'
+        ports:
+            - '${APP_PORT:-80}:80'
+            - '${VITE_PORT:-5173}:${VITE_PORT:-5173}'
+        environment:
+            WWWUSER: '${WWWUSER}'
+            LARAVEL_SAIL: 1
+            XDEBUG_MODE: '${SAIL_XDEBUG_MODE:-off}'
+            XDEBUG_CONFIG: '${SAIL_XDEBUG_CONFIG:-client_host=host.docker.internal}'
+            IGNITION_LOCAL_SITES_PATH: '${PWD}'
+        volumes:
+            - '.:/var/www/html'
+        networks:
+            - sail
+        depends_on:
+            mysql:
+                condition: service_healthy
+            redis:
+                condition: service_started
+
+    # -------------------------------------------------------------------------
+    # Queue Worker — mesma imagem do app, roda php artisan queue:work
+    # -------------------------------------------------------------------------
+    queue.worker:
+        build:
+            context: './vendor/laravel/sail/runtimes/8.5'
+            dockerfile: Dockerfile
+            args:
+                WWWGROUP: '${WWWGROUP}'
+        image: 'sail-8.5/app'
+        command: php artisan queue:work --sleep=3 --tries=3 --timeout=90
+        environment:
+            WWWUSER: '${WWWUSER}'
+            LARAVEL_SAIL: 1
+        volumes:
+            - '.:/var/www/html'
+        networks:
+            - sail
+        restart: unless-stopped
+        depends_on:
+            mysql:
+                condition: service_healthy
+            redis:
+                condition: service_started
+
+    # -------------------------------------------------------------------------
+    # MySQL — banco principal do Laravel
+    # -------------------------------------------------------------------------
+    mysql:
+        image: 'mysql:8.4'
+        ports:
+            - '${FORWARD_DB_PORT:-3306}:3306'
+        environment:
+            MYSQL_ROOT_PASSWORD: '${DB_PASSWORD}'
+            MYSQL_ROOT_HOST: '%'
+            MYSQL_DATABASE: '${DB_DATABASE}'
+            MYSQL_USER: '${DB_USERNAME}'
+            MYSQL_PASSWORD: '${DB_PASSWORD}'
+            MYSQL_ALLOW_EMPTY_PASSWORD: 1
+            MYSQL_EXTRA_OPTIONS: '${MYSQL_EXTRA_OPTIONS:-}'
+        volumes:
+            - 'sail-mysql:/var/lib/mysql'
+            - './vendor/laravel/sail/database/mysql/create-testing-database.sh:/docker-entrypoint-initdb.d/10-create-testing-database.sh'
+        networks:
+            - sail
+        healthcheck:
+            test:
+                - CMD
+                - mysqladmin
+                - ping
+                - '-p${DB_PASSWORD}'
+            retries: 3
+            timeout: 5s
+
+    # -------------------------------------------------------------------------
+    # Redis — compartilhado entre Laravel (cache/queue) e Evolution API
+    # -------------------------------------------------------------------------
+    redis:
+        image: 'redis:7-alpine'
+        container_name: redis
+        restart: unless-stopped
+        ports:
+            - '${FORWARD_REDIS_PORT:-6379}:6379'
+        volumes:
+            - 'sail-redis:/data'
+        networks:
+            - sail
+        healthcheck:
+            test: ['CMD', 'redis-cli', 'ping']
+            retries: 3
+            timeout: 5s
+
+    # -------------------------------------------------------------------------
+    # Mailpit — servidor de e-mail local com UI (http://localhost:8025)
+    # -------------------------------------------------------------------------
+    mailpit:
+        image: 'axllent/mailpit:latest'
+        restart: unless-stopped
+        ports:
+            - '${FORWARD_MAILPIT_PORT:-1025}:1025'   # SMTP
+            - '${FORWARD_MAILPIT_DASHBOARD_PORT:-8025}:8025'  # UI
+        networks:
+            - sail
+
+    # -------------------------------------------------------------------------
+    # PostgreSQL — banco exclusivo da Evolution API
+    # -------------------------------------------------------------------------
+    evolution-postgres:
+        image: 'postgres:15-alpine'
+        container_name: evolution-postgres
+        restart: unless-stopped
+        environment:
+            POSTGRES_USER: '${EVOLUTION_DB_USER:-postgres}'
+            POSTGRES_PASSWORD: '${EVOLUTION_DB_PASSWORD:-postgres}'
+            POSTGRES_DB: '${EVOLUTION_DB_NAME:-evolution}'
+        volumes:
+            - 'evolution-postgres:/var/lib/postgresql/data'
+        networks:
+            - sail
+        healthcheck:
+            test: ['CMD-SHELL', 'pg_isready -U ${EVOLUTION_DB_USER:-postgres}']
+            interval: 5s
+            timeout: 5s
+            retries: 5
+
+    # -------------------------------------------------------------------------
+    # Evolution API — WhatsApp via Baileys (self-hosted)
+    # UI/API disponível em http://localhost:8080
+    # -------------------------------------------------------------------------
+    evolution-api:
+        image: 'atendai/evolution-api:v2.2.0'
+        container_name: evolution-api
+        restart: unless-stopped
+        ports:
+            - '${EVOLUTION_PORT:-8080}:8080'
+        environment:
+            SERVER_URL: 'http://localhost:${EVOLUTION_PORT:-8080}'
+            AUTHENTICATION_TYPE: apikey
+            AUTHENTICATION_API_KEY: '${EVOLUTION_API_KEY}'
+            DATABASE_ENABLED: 'true'
+            DATABASE_PROVIDER: postgresql
+            DATABASE_CONNECTION_URI: 'postgresql://${EVOLUTION_DB_USER:-postgres}:${EVOLUTION_DB_PASSWORD:-postgres}@evolution-postgres:5432/${EVOLUTION_DB_NAME:-evolution}?schema=public'
+            CACHE_REDIS_ENABLED: 'true'
+            CACHE_REDIS_URI: 'redis://redis:6379'
+        volumes:
+            - 'evolution-instances:/evolution/instances'
+        networks:
+            - sail
+        depends_on:
+            evolution-postgres:
+                condition: service_healthy
+            redis:
+                condition: service_started
+
+networks:
+    sail:
+        driver: bridge
+
+volumes:
+    sail-mysql:
+        driver: local
+    sail-redis:
+        driver: local
+    evolution-postgres:
+        driver: local
+    evolution-instances:
+        driver: local

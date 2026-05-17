@@ -1,0 +1,189 @@
+name: deploy
+
+# Dispara apenas em push direto na main (após PR aprovado e mergeado)
+on:
+  push:
+    branches:
+      - main
+
+# Garante que apenas um deploy rode por vez — cancela o anterior se houver
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false   # false = aguarda o anterior terminar (mais seguro)
+
+jobs:
+
+  # ---------------------------------------------------------------------------
+  # 1. Qualidade — lint + testes devem passar antes de qualquer deploy
+  # ---------------------------------------------------------------------------
+  quality:
+    name: Lint & Tests
+    runs-on: ubuntu-latest
+    environment: Testing
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+          coverage: none
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Flux credentials
+        run: composer config http-basic.composer.fluxui.dev "${{ secrets.FLUX_USERNAME }}" "${{ secrets.FLUX_LICENSE_KEY }}"
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader --no-scripts
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Copy .env
+        run: cp .env.example .env
+
+      - name: Generate app key
+        run: php artisan key:generate
+
+      - name: Build assets
+        run: npm run build
+
+      - name: Lint (Pint)
+        run: composer lint:check
+
+      - name: Run tests
+        run: ./vendor/bin/pest --no-coverage
+
+  # ---------------------------------------------------------------------------
+  # 2. Build — gera os artefatos de produção
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build Production
+    runs-on: ubuntu-latest
+    needs: quality       # só roda se quality passar
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+          coverage: none
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Flux credentials
+        run: composer config http-basic.composer.fluxui.dev "${{ secrets.FLUX_USERNAME }}" "${{ secrets.FLUX_LICENSE_KEY }}"
+
+      - name: Install PHP dependencies (sem dev)
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev --no-scripts
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build assets (produção)
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+      - name: Remove arquivos desnecessários para deploy
+        run: |
+          rm -rf node_modules
+          rm -rf tests
+          rm -rf .github
+          rm -rf pag_can
+          rm -rf docs
+          rm -f .env.example
+          rm -f docker-compose.yml
+          rm -f phpunit.xml
+          rm -f pint.json
+          rm -f vite.config.js
+          rm -f package.json
+          rm -f package-lock.json
+
+      - name: Upload artefato de build
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-build
+          path: .
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # 3. Deploy — envia para a Hostinger via SSH/rsync
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: Deploy to Hostinger
+    runs-on: ubuntu-latest
+    needs: build
+    environment: Production   # requer aprovação manual se configurado no GitHub
+
+    steps:
+      - name: Download artefato de build
+        uses: actions/download-artifact@v4
+        with:
+          name: production-build
+          path: ./release
+
+      - name: Configurar chave SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Ativar modo de manutenção
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+              -p ${{ secrets.SSH_PORT }} \
+              ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+              "cd /public_html/pagamento && php artisan down --retry=60"
+
+      - name: Sincronizar arquivos via rsync
+        run: |
+          rsync -azP \
+            --delete \
+            --exclude='.env' \
+            --exclude='storage/app/private' \
+            --exclude='storage/logs' \
+            --exclude='storage/framework/cache' \
+            --exclude='storage/framework/sessions' \
+            --exclude='storage/framework/views' \
+            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }}" \
+            ./release/ \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/public_html/pagamento/
+
+      - name: Pós-deploy — migrate, cache e queue
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+              -p ${{ secrets.SSH_PORT }} \
+              ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+              "cd /public_html/pagamento && \
+               php artisan migrate --force && \
+               php artisan config:cache && \
+               php artisan route:cache && \
+               php artisan view:cache && \
+               php artisan event:cache && \
+               php artisan queue:restart"
+
+      - name: Desativar modo de manutenção
+        if: always()   # roda mesmo se o passo anterior falhar
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+              -p ${{ secrets.SSH_PORT }} \
+              ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+              "cd /public_html/pagamento && php artisan up"
