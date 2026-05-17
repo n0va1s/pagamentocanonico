@@ -1,8 +1,36 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 42" {{ $attributes }}>
-    <path 
-        fill="currentColor" 
-        fill-rule="evenodd" 
-        clip-rule="evenodd"
-        d="M17.2 5.633 8.6.855 0 5.633v26.51l16.2 9 16.2-9v-8.442l7.6-4.223V9.856l-8.6-4.777-8.6 4.777V18.3l-5.6 3.111V5.633ZM38 18.301l-5.6 3.11v-6.157l5.6-3.11V18.3Zm-1.06-7.856-5.54 3.078-5.54-3.079 5.54-3.078 5.54 3.079ZM24.8 18.3v-6.157l5.6 3.111v6.158L24.8 18.3Zm-1 1.732 5.54 3.078-13.14 7.302-5.54-3.078 13.14-7.3v-.002Zm-16.2 7.89 7.6 4.222V38.3L2 30.966V7.92l5.6 3.111v16.892ZM8.6 9.3 3.06 6.222 8.6 3.143l5.54 3.08L8.6 9.3Zm21.8 15.51-13.2 7.334V38.3l13.2-7.334v-6.156ZM9.6 11.034l5.6-3.11v14.6l-5.6 3.11v-14.6Z"
-    />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" {{ $attributes }}>
+    <defs>
+        <linearGradient id="brand-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#2563eb" />
+            <stop offset="100%" stop-color="#1d4ed8" />
+        </linearGradient>
+    </defs>
+
+    {{-- Documento --}}
+    <path d="M 160,96 L 304,96 L 384,176 L 384,416 A 32,32 0 0 1 352,448 L 160,448 A 32,32 0 0 1 128,416 L 128,128 A 32,32 0 0 1 160,96 Z"
+          fill="none"
+          stroke="url(#brand-gradient)"
+          stroke-width="24"
+          stroke-linejoin="round"
+          stroke-linecap="round"/>
+
+    {{-- Dobra do canto --}}
+    <path d="M 304,96 L 304,176 L 384,176"
+          fill="none"
+          stroke="url(#brand-gradient)"
+          stroke-width="24"
+          stroke-linejoin="round"
+          stroke-linecap="round"/>
+
+    {{-- Linhas de texto --}}
+    <line x1="180" y1="180" x2="260" y2="180" stroke="url(#brand-gradient)" stroke-width="20" stroke-linecap="round"/>
+    <line x1="180" y1="240" x2="332" y2="240" stroke="url(#brand-gradient)" stroke-width="20" stroke-linecap="round"/>
+
+    {{-- Linha de pulso / gráfico --}}
+    <path d="M 180,340 L 220,340 L 240,300 L 265,370 L 290,270 L 325,355 L 385,215"
+          fill="none"
+          stroke="#2563eb"
+          stroke-width="28"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
 </svg>
