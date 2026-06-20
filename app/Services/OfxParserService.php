@@ -63,8 +63,13 @@ class OfxParserService
     {
         $conteudo = file_get_contents($caminho);
 
-        // Banco do Brasil usa ISO-8859-1
-        $conteudo = mb_convert_encoding($conteudo, 'UTF-8', 'ISO-8859-1');
+        // Verifica a codificação declarada ou o charset do arquivo
+        if (str_contains($conteudo, 'ENCODING:UTF-8') || mb_check_encoding($conteudo, 'UTF-8')) {
+            // Já está em UTF-8
+        } else {
+            // Assume ISO-8859-1 para outros arquivos do Banco do Brasil
+            $conteudo = mb_convert_encoding($conteudo, 'UTF-8', 'ISO-8859-1');
+        }
 
         return str_replace(["\r\n", "\r"], "\n", $conteudo);
     }
@@ -87,11 +92,22 @@ class OfxParserService
                 continue;
             }
 
+            $fitid = trim($bloco['FITID'] ?? '');
+            $name = trim($bloco['NAME'] ?? '');
+
+            // Ignora registros informacionais de saldo e transações sem ID único
+            if ($fitid === '' || 
+                str_contains(strtolower($name), 'saldo anterior') || 
+                str_contains(strtolower($name), 'saldo do dia') || 
+                str_contains(strtolower($name), 'saldo anterior/atual')) {
+                continue;
+            }
+
             $valor = (float) str_replace(',', '.', $bloco['TRNAMT'] ?? '0');
 
             Transacao::create([
                 'idt_ofx' => $ofx->idt_ofx,
-                'num_transacao' => $bloco['FITID'] ?? null,
+                'num_transacao' => $fitid,
                 'dat_transacao' => $datTransacao,
                 'tip_transacao' => $bloco['TRNTYPE'] ?? null,
                 'val_transacao' => $valor,
@@ -218,6 +234,12 @@ class OfxParserService
         }
 
         $descricao = preg_replace('/\s+/', ' ', trim($descricao));
+
+        // Limpa data e hora iniciais do MEMO (ex: "18/03 18:53 " ou "18/03 ")
+        $descricao = preg_replace('/^\d{2}\/\d{2}(?:\s+\d{2}:\d{2})?\s+/', '', $descricao);
+
+        // Limpa CPF/CNPJ/documentos no início do MEMO (ex: "00005789252141 " ou "33.683.111/0001-07 ")
+        $descricao = preg_replace('/^(?:\d|[\.\-\/]){11,18}\s+/', '', $descricao);
 
         // Códigos de agência/conta (ex: "AG 1234 CC 56789-0")
         $descricao = preg_replace('/\bAG\s*\d+\s*CC\s*[\d\-]+\b/i', '', $descricao);

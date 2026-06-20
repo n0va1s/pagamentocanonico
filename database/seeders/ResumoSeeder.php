@@ -42,7 +42,7 @@ class ResumoSeeder extends Seeder
 
                     Resumo::firstOrCreate(
                         [
-                            'idt_ofx' => $ofx->id,
+                            'idt_ofx' => $ofx->idt_ofx,
                             'nom_pessoa' => $pessoa,
                             'num_ano' => $numAno,
                             'num_mes' => $numMes,

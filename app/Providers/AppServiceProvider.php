@@ -8,6 +8,9 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
+use App\Models\User;
+use App\Enums\Perfil;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rules\Password;
 
 class AppServiceProvider extends ServiceProvider
@@ -30,6 +33,10 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+
+        Gate::define('admin', fn (User $user) => $user->isAdmin());
+        Gate::define('diretor', fn (User $user) => $user->isAdmin() || $user->isDiretor());
+        Gate::define('membro', fn (User $user) => $user->isAdmin() || $user->isDiretor() || $user->isMembro());
     }
 
     /**

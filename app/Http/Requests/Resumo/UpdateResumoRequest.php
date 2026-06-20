@@ -14,7 +14,7 @@ class UpdateResumoRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'idt_ofx' => ['sometimes', 'required', 'integer', 'exists:ofx,id'],
+            'idt_ofx' => ['sometimes', 'required', 'integer', 'exists:ofx,idt_ofx'],
             'nom_pessoa' => ['sometimes', 'required', 'string', 'max:255'],
             'num_ano' => ['sometimes', 'required', 'integer', 'min:2000', 'max:2100'],
             'num_mes' => ['sometimes', 'required', 'integer', 'min:1', 'max:12'],

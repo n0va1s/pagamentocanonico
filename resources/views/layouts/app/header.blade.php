@@ -3,6 +3,7 @@
     <head>
         @include('partials.head')
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+        <link rel="stylesheet" href="{{ asset('css/app-internal.css') }}">
     </head>
     <body class="min-h-screen bg-white dark:bg-zinc-800">
         <flux:header container class="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
@@ -12,18 +13,21 @@
                 <div class="w-7 h-7 rounded-md bg-blue-600 flex items-center justify-center text-white text-xs">
                     <i class="fa-solid fa-chart-line"></i>
                 </div>
-                <span class="font-bold text-zinc-800 dark:text-white text-sm">OFX Tracker</span>
+                <span class="font-bold text-zinc-800 dark:text-white text-sm">Pagamento Canônico</span>
             </div>
 
             <flux:navbar class="-mb-px max-lg:hidden">
                 <flux:navbar.item icon="layout-grid" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
                     {{ __('Dashboard') }}
                 </flux:navbar.item>
-                <flux:navbar.item icon="file-import" :href="route('upload')" :current="request()->routeIs('upload')" wire:navigate>
+                <flux:navbar.item icon="arrow-up-tray" :href="route('upload')" :current="request()->routeIs('upload')" wire:navigate>
                     {{ __('Importar OFX') }}
                 </flux:navbar.item>
                 <flux:navbar.item icon="users" :href="route('members.index')" :current="request()->routeIs('members.*')" wire:navigate>
                     {{ __('Membros') }}
+                </flux:navbar.item>
+                <flux:navbar.item icon="bell" :href="route('mensagens')" :current="request()->routeIs('mensagens')" wire:navigate>
+                    {{ __('Mensagens') }}
                 </flux:navbar.item>
             </flux:navbar>
 
@@ -31,11 +35,11 @@
 
             <flux:navbar class="me-1.5 space-x-0.5 rtl:space-x-reverse py-0!">
                 @php
-                    $failedNotifications = App\Models\NotificationLog::where('status','failed')->count();
+                    $failedNotifications = App\Models\Notificacao::where('ind_enviada', false)->count();
                 @endphp
                 @if($failedNotifications > 0)
                 <flux:tooltip :content="__('Notificações falhas')" position="bottom">
-                    <flux:navbar.item class="!h-10 [&>div>svg]:size-5 relative" icon="bell-alert" href="#" :label="__('Alerts')">
+                    <flux:navbar.item class="!h-10 [&>div>svg]:size-5 relative" icon="bell-alert" :href="route('mensagens')" :label="__('Alerts')" wire:navigate>
                         <span class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">{{ $failedNotifications }}</span>
                     </flux:navbar.item>
                 </flux:tooltip>
@@ -64,13 +68,16 @@
                     </flux:sidebar.item>
                 </flux:sidebar.group>
                 <flux:sidebar.group :heading="__('Financeiro')">
-                    <flux:sidebar.item icon="file-import" :href="route('upload')" :current="request()->routeIs('upload')" wire:navigate>
+                    <flux:sidebar.item icon="arrow-up-tray" :href="route('upload')" :current="request()->routeIs('upload')" wire:navigate>
                         {{ __('Importar OFX') }}
                     </flux:sidebar.item>
                 </flux:sidebar.group>
                 <flux:sidebar.group :heading="__('Cadastros')">
                     <flux:sidebar.item icon="users" :href="route('members.index')" :current="request()->routeIs('members.*')" wire:navigate>
                         {{ __('Membros') }}
+                    </flux:sidebar.item>
+                    <flux:sidebar.item icon="bell" :href="route('mensagens')" :current="request()->routeIs('mensagens')" wire:navigate>
+                        {{ __('Mensagens') }}
                     </flux:sidebar.item>
                 </flux:sidebar.group>
             </flux:sidebar.nav>

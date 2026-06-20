@@ -16,36 +16,48 @@
             </flux:sidebar.header>
 
             <flux:sidebar.nav>
-                <flux:sidebar.group :heading="__('Painel')" class="grid">
-                    <flux:sidebar.item icon="layout-grid" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
-                        {{ __('Dashboard') }}
-                    </flux:sidebar.item>
-                </flux:sidebar.group>
+                @can('diretor')
+                    <flux:sidebar.group :heading="__('Painel')" class="grid">
+                        <flux:sidebar.item icon="layout-grid" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
+                            {{ __('Dashboard') }}
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
 
-                <flux:sidebar.group :heading="__('Financeiro')" class="grid">
-                    <flux:sidebar.item icon="file-import" :href="route('upload')" :current="request()->routeIs('upload')" wire:navigate>
-                        {{ __('Importar OFX') }}
-                    </flux:sidebar.item>
-                    <flux:sidebar.item icon="table-cells" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
-                        {{ __('Acompanhamento') }}
-                    </flux:sidebar.item>
-                </flux:sidebar.group>
+                    <flux:sidebar.group :heading="__('Financeiro')" class="grid">
+                        <flux:sidebar.item icon="arrow-up-tray" :href="route('upload')" :current="request()->routeIs('upload')" wire:navigate>
+                            {{ __('Importar OFX') }}
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="table-cells" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
+                            {{ __('Acompanhamento') }}
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+                @endcan
 
                 <flux:sidebar.group :heading="__('Cadastros')" class="grid">
-                    <flux:sidebar.item icon="users" :href="route('members.index')" :current="request()->routeIs('members.*')" wire:navigate>
-                        {{ __('Membros') }}
+                    @can('diretor')
+                        <flux:sidebar.item icon="users" :href="route('members.index')" :current="request()->routeIs('members.*')" wire:navigate>
+                            {{ __('Membros') }}
+                        </flux:sidebar.item>
+                    @endcan
+                    <flux:sidebar.item icon="envelope" :href="route('contato')" :current="request()->routeIs('contato')" wire:navigate>
+                        {{ __('Contato') }}
+                    </flux:sidebar.item>
+                    <flux:sidebar.item icon="user" :href="route('minha-associacao')" :current="request()->routeIs('minha-associacao')" wire:navigate>
+                        {{ __('Minha Associação') }}
                     </flux:sidebar.item>
                 </flux:sidebar.group>
             </flux:sidebar.nav>
 
             <flux:spacer />
 
-            <flux:sidebar.nav>
-                <flux:sidebar.item icon="bell" :href="route('dashboard')" :current="request()->routeIs('notifications.*')" wire:navigate>
-                    {{ __('Notificações') }}
-                    <flux:badge color="red" size="sm" class="ml-auto">{{ App\Models\NotificationLog::where('status','failed')->count() }}</flux:badge>
-                </flux:sidebar.item>
-            </flux:sidebar.nav>
+            @can('diretor')
+                <flux:sidebar.nav>
+                    <flux:sidebar.item icon="bell" :href="route('mensagens')" :current="request()->routeIs('mensagens')" wire:navigate>
+                        {{ __('Mensagens') }}
+                        <flux:badge color="red" size="sm" class="ml-auto">{{ App\Models\Notificacao::where('ind_enviada', false)->count() }}</flux:badge>
+                    </flux:sidebar.item>
+                </flux:sidebar.nav>
+            @endcan
 
             <x-desktop-user-menu class="hidden lg:block" :name="auth()->user()->name" />
         </flux:sidebar>

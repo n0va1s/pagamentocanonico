@@ -14,10 +14,10 @@ class UpdateTransacaoRequest extends FormRequest
 
     public function rules(): array
     {
-        $transacaoId = $this->route('transacao')?->id;
+        $transacaoId = $this->route('transacao')?->idt_transacao;
 
         return [
-            'idt_ofx' => ['sometimes', 'required', 'integer', 'exists:ofx,id'],
+            'idt_ofx' => ['sometimes', 'required', 'integer', 'exists:ofx,idt_ofx'],
             'num_transacao' => ['nullable', 'string', 'max:255', Rule::unique('transacoes', 'num_transacao')->ignore($transacaoId)],
             'dat_transacao' => ['sometimes', 'required', 'date'],
             'tip_transacao' => ['nullable', 'string', 'in:CREDIT,DEBIT', 'max:20'],

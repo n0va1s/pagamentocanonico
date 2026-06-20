@@ -15,10 +15,45 @@ class DatabaseSeeder extends Seeder
     {
         // User::factory(10)->create();
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        User::firstOrCreate(
+            ['email' => 'admin@example.com'],
+            [
+                'name' => 'Admin User',
+                'password' => \Illuminate\Support\Facades\Hash::make('password'),
+                'role' => \App\Enums\Perfil::ADMIN,
+                'email_verified_at' => now(),
+            ]
+        );
+
+        User::firstOrCreate(
+            ['email' => 'diretor@example.com'],
+            [
+                'name' => 'Diretor User',
+                'password' => \Illuminate\Support\Facades\Hash::make('password'),
+                'role' => \App\Enums\Perfil::DIRETOR,
+                'email_verified_at' => now(),
+            ]
+        );
+
+        User::firstOrCreate(
+            ['email' => 'jp.pessoal@email.com'],
+            [
+                'name' => 'João Paulo Silva',
+                'password' => \Illuminate\Support\Facades\Hash::make('password'),
+                'role' => \App\Enums\Perfil::MEMBRO,
+                'email_verified_at' => now(),
+            ]
+        );
+
+        User::firstOrCreate(
+            ['email' => 'maria.oliveira@email.com'],
+            [
+                'name' => 'Maria Oliveira',
+                'password' => \Illuminate\Support\Facades\Hash::make('password'),
+                'role' => \App\Enums\Perfil::MEMBRO,
+                'email_verified_at' => now(),
+            ]
+        );
 
         $this->call([
             MembroSeeder::class,

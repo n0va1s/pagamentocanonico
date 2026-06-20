@@ -8,7 +8,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Resumo extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory;
+
 
     protected $table = 'resumos';
 

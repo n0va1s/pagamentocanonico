@@ -6,30 +6,17 @@ use App\Enums\TipoNotificacao;
 use App\Models\Membro;
 use App\Models\Notificacao;
 use App\Services\Notifications\Contracts\NotificationChannelInterface;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class WhatsAppChannel implements NotificationChannelInterface
 {
-    private string $baseUrl;
-
-    private string $apiKey;
-
-    private string $instancia;
-
-    public function __construct()
-    {
-        $this->baseUrl = config('services.evolution.url', 'http://localhost:8080');
-        $this->apiKey = config('services.evolution.api_key', '');
-        $this->instancia = config('services.evolution.instance', 'default');
-    }
-
     public function getChannelName(): string
     {
         return 'whatsapp';
     }
 
-    public function send(Membro $membro, string $mensagem, TipoNotificacao $tipo): array
+    public function send(Membro $membro, string $mensagem, TipoNotificacao $tipo, array $dados = []): array
+
     {
         $telefone = $this->sanitizarTelefone($membro->tel_membro);
 
@@ -37,69 +24,30 @@ class WhatsAppChannel implements NotificationChannelInterface
             return ['success' => false, 'error' => 'Número de WhatsApp não cadastrado ou inválido.'];
         }
 
+        // Gera a URL do WhatsApp Web
+        $url = 'https://wa.me/' . $telefone . '?text=' . urlencode($mensagem);
+
         try {
-            $response = Http::withHeaders([
-                'apikey' => $this->apiKey,
-                'Content-Type' => 'application/json',
-            ])->post("{$this->baseUrl}/message/sendText/{$this->instancia}", [
-                'number' => $telefone,
-                'options' => [
-                    'delay' => 1200,
-                    'presence' => 'composing',
-                ],
-                'textMessage' => ['text' => $mensagem],
-            ]);
+            // Registra o envio no banco de dados local
+            $this->registrar($membro, $mensagem, $tipo, true, 'wa_me_link');
 
-            $data = $response->json();
-
-            if ($response->successful() && ($data['status'] ?? '') !== 'error') {
-                $externalId = $data['key']['id'] ?? $data['id'] ?? null;
-                $this->registrar($membro, $mensagem, $tipo, true, $externalId);
-
-                return ['success' => true, 'external_id' => $externalId];
+            // Envia o espelho por e-mail se cadastrado
+            if (filled($membro->eml_membro)) {
+                $emailChannel = app(EmailChannel::class);
+                $emailChannel->send($membro, $mensagem, $tipo);
             }
 
-            $erro = $data['message'] ?? $data['error'] ?? 'Erro desconhecido na Evolution API.';
-            $this->registrar($membro, $mensagem, $tipo, false, null, $erro);
-
-            return ['success' => false, 'error' => $erro];
+            return [
+                'success' => true,
+                'redirect_url' => $url,
+            ];
 
         } catch (\Exception $e) {
-            Log::error("WhatsAppChannel [{$membro->idt_membro}]: ".$e->getMessage());
+            Log::error("WhatsAppChannel [{$membro->idt_membro}]: " . $e->getMessage());
             $this->registrar($membro, $mensagem, $tipo, false, null, $e->getMessage());
 
             return ['success' => false, 'error' => $e->getMessage()];
         }
-    }
-
-    /**
-     * Cria a instância na Evolution API (executar uma vez via tinker ou comando).
-     */
-    public function criarInstancia(): array
-    {
-        $response = Http::withHeaders([
-            'apikey' => $this->apiKey,
-            'Content-Type' => 'application/json',
-        ])->post("{$this->baseUrl}/instance/create", [
-            'instanceName' => $this->instancia,
-            'token' => $this->apiKey,
-            'qrcode' => true,
-        ]);
-
-        return $response->json() ?? ['error' => 'Sem resposta da API.'];
-    }
-
-    /**
-     * Retorna o QR Code em base64 para conectar o WhatsApp.
-     */
-    public function obterQrCode(): ?string
-    {
-        $response = Http::withHeaders(['apikey' => $this->apiKey])
-            ->get("{$this->baseUrl}/instance/connect/{$this->instancia}");
-
-        $data = $response->json();
-
-        return $data['qrcode']['base64'] ?? $data['qrcode'] ?? null;
     }
 
     private function sanitizarTelefone(?string $telefone): ?string
@@ -110,12 +58,12 @@ class WhatsAppChannel implements NotificationChannelInterface
 
         $limpo = preg_replace('/\D/', '', $telefone);
 
-        // Adiciona DDI 55 se tiver 10 ou 11 dígitos (formato brasileiro)
+        // Adiciona DDI 55 se tiver 10 ou 11 dígitos
         if (strlen($limpo) === 10 || strlen($limpo) === 11) {
-            $limpo = '55'.$limpo;
+            $limpo = '55' . $limpo;
         }
 
-        if (! str_starts_with($limpo, '55') || strlen($limpo) < 12) {
+        if (!str_starts_with($limpo, '55') || strlen($limpo) < 12) {
             return null;
         }
 

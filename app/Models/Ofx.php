@@ -8,7 +8,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Ofx extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory;
+
 
     protected $table = 'ofx';
 

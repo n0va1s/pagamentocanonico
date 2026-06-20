@@ -16,16 +16,17 @@ class EmailChannel implements NotificationChannelInterface
         return 'email';
     }
 
-    public function send(Membro $membro, string $mensagem, TipoNotificacao $tipo): array
+    public function send(Membro $membro, string $mensagem, TipoNotificacao $tipo, array $dados = []): array
     {
         if (empty($membro->eml_membro)) {
             return ['success' => false, 'error' => 'E-mail não cadastrado.'];
         }
 
         try {
-            Mail::raw($mensagem, function ($mail) use ($membro, $tipo) {
-                $mail->to($membro->eml_membro, $membro->nom_membro)
-                    ->subject($this->assunto($tipo));
+            Mail::raw($mensagem, function ($mail) use ($membro, $tipo, $dados) {
+                $mail->from('ascaje@gmail.com', 'ASCAJE')
+                    ->to($membro->eml_membro, $membro->nom_membro)
+                    ->subject($this->assunto($tipo, $dados));
             });
 
             $this->registrar($membro, $mensagem, $tipo, true);
@@ -40,12 +41,18 @@ class EmailChannel implements NotificationChannelInterface
         }
     }
 
-    private function assunto(TipoNotificacao $tipo): string
+    private function assunto(TipoNotificacao $tipo, array $dados = []): string
     {
+        if (filled($dados['subject'] ?? '')) {
+            return $dados['subject'];
+        }
+
         return match ($tipo) {
-            TipoNotificacao::INADIMPLENTE => '['.config('app.name').'] Pendência financeira',
-            TipoNotificacao::ANIVERSARIANTE => '['.config('app.name').'] Feliz aniversário! 🎂',
-            TipoNotificacao::BOAS_VINDAS => 'Bem-vindo(a) ao '.config('app.name').'! 🎉',
+            TipoNotificacao::INADIMPLENTE => '[' . config('app.name') . '] Pendência financeira',
+            TipoNotificacao::ANIVERSARIANTE => '[' . config('app.name') . '] Feliz aniversário! 🎂',
+            TipoNotificacao::BOAS_VINDAS => 'Bem-vindo(a) ao ' . config('app.name') . '! 🎉',
+            TipoNotificacao::CUSTOM => '[' . config('app.name') . '] Comunicado Importante',
+            TipoNotificacao::QUITACAO_ANUAL => '[' . config('app.name') . '] Declaração de Quitação Anual de Contribuições',
         };
     }
 

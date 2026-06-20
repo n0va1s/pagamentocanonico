@@ -36,7 +36,7 @@ class NotificationDispatcher
         $resultados = [];
 
         foreach ($this->canaisAtivos($membro) as $canal) {
-            $resultados[$canal->getChannelName()] = $canal->send($membro, $mensagem, $tipo);
+            $resultados[$canal->getChannelName()] = $canal->send($membro, $mensagem, $tipo, $dados);
         }
 
         return $resultados;
@@ -47,14 +47,15 @@ class NotificationDispatcher
      *
      * @return array{success: bool, external_id?: string|null, error?: string}
      */
-    public function enviarPor(string $canal, Membro $membro, string $mensagem, TipoNotificacao $tipo): array
+    public function enviarPor(string $canal, Membro $membro, string $mensagem, TipoNotificacao $tipo, array $dados = []): array
     {
         if (! isset($this->canais[$canal])) {
             return ['success' => false, 'error' => "Canal '{$canal}' não encontrado."];
         }
 
-        return $this->canais[$canal]->send($membro, $mensagem, $tipo);
+        return $this->canais[$canal]->send($membro, $mensagem, $tipo, $dados);
     }
+
 
     /**
      * Retorna apenas os canais habilitados para o membro, na ordem de prioridade.

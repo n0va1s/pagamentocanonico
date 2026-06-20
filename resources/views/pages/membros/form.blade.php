@@ -1,6 +1,6 @@
 <?php
 
-use App\Enums\TipoAssociado;
+use App\Enums\Perfil;
 use App\Models\Membro;
 use Illuminate\Validation\Rule;
 use Livewire\Volt\Component;
@@ -61,7 +61,7 @@ new class extends Component {
             'end_logradouro'         => ['nullable', 'string', 'max:150'],
             'end_mumero'             => ['nullable', 'string', 'max:20'],
             'end_complemento'        => ['nullable', 'string', 'max:150'],
-            'tip_associado'          => ['required', Rule::enum(TipoAssociado::class)],
+            'tip_associado'          => ['required', Rule::enum(Perfil::class)],
             'des_telegram_chat_id'   => ['nullable', 'string', 'max:50'],
             'ind_notificar_whatsapp' => ['boolean'],
             'ind_notificar_email'    => ['boolean'],
@@ -103,7 +103,7 @@ new class extends Component {
     public function with(): array
     {
         return [
-            'tiposAssociado' => TipoAssociado::cases(),
+            'tiposAssociado' => Perfil::cases(),
             'editando'       => $this->membro?->exists ?? false,
         ];
     }
@@ -113,15 +113,15 @@ new class extends Component {
     <form wire:submit="salvar" class="space-y-6">
 
         {{-- Dados Pessoais --}}
-        <flux:card>
-            <flux:card.header>
+        <flux:card class="space-y-6">
+            <div>
                 <flux:heading size="sm">Dados Pessoais</flux:heading>
-            </flux:card.header>
+            </div>
 
-            <flux:card.body class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                 <flux:field class="md:col-span-2">
-                    <flux:label for="nom_membro">Nome completo <flux:required /></flux:label>
+                    <flux:label required for="nom_membro">Nome completo</flux:label>
                     <flux:input
                         id="nom_membro"
                         wire:model="nom_membro"
@@ -147,7 +147,7 @@ new class extends Component {
                 </flux:field>
 
                 <flux:field>
-                    <flux:label for="eml_membro">E-mail <flux:required /></flux:label>
+                    <flux:label required for="eml_membro">E-mail</flux:label>
                     <flux:input
                         id="eml_membro"
                         type="email"
@@ -169,7 +169,7 @@ new class extends Component {
                 </flux:field>
 
                 <flux:field>
-                    <flux:label for="tip_associado">Tipo de associação <flux:required /></flux:label>
+                    <flux:label required for="tip_associado">Tipo de associação</flux:label>
                     <flux:select id="tip_associado" wire:model="tip_associado">
                         <flux:select.option value="">Selecione...</flux:select.option>
                         @foreach ($tiposAssociado as $tipo)
@@ -181,16 +181,16 @@ new class extends Component {
                     <flux:error name="tip_associado" />
                 </flux:field>
 
-            </flux:card.body>
+            </div>
         </flux:card>
 
         {{-- Endereço --}}
-        <flux:card>
-            <flux:card.header>
+        <flux:card class="space-y-6">
+            <div>
                 <flux:heading size="sm">Endereço</flux:heading>
-            </flux:card.header>
+            </div>
 
-            <flux:card.body class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
 
                 <flux:field class="md:col-span-2">
                     <flux:label for="end_logradouro">Logradouro</flux:label>
@@ -222,17 +222,17 @@ new class extends Component {
                     <flux:error name="end_complemento" />
                 </flux:field>
 
-            </flux:card.body>
+            </div>
         </flux:card>
 
         {{-- Notificações --}}
-        <flux:card>
-            <flux:card.header>
+        <flux:card class="space-y-6">
+            <div>
                 <flux:heading size="sm">Notificações</flux:heading>
                 <flux:subheading>Canais por onde o membro receberá alertas de inadimplência.</flux:subheading>
-            </flux:card.header>
+            </div>
 
-            <flux:card.body class="space-y-4">
+            <div class="space-y-4">
 
                 <flux:field variant="inline">
                     <flux:checkbox id="ind_notificar_whatsapp" wire:model="ind_notificar_whatsapp" />
@@ -260,7 +260,7 @@ new class extends Component {
                     <flux:error name="des_telegram_chat_id" />
                 </flux:field>
 
-            </flux:card.body>
+            </div>
         </flux:card>
 
         {{-- Ações --}}

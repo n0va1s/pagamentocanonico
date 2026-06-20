@@ -16,30 +16,43 @@
             </div>
 
             <flux:navbar class="-mb-px max-lg:hidden">
-                <flux:navbar.item icon="layout-grid" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
-                    {{ __('Dashboard') }}
+                @can('diretor')
+                    <flux:navbar.item icon="layout-grid" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
+                        {{ __('Dashboard') }}
+                    </flux:navbar.item>
+                    <flux:navbar.item icon="arrow-up-tray" :href="route('upload')" :current="request()->routeIs('upload')" wire:navigate>
+                        {{ __('Importar OFX') }}
+                    </flux:navbar.item>
+                    <flux:navbar.item icon="users" :href="route('members.index')" :current="request()->routeIs('members.*')" wire:navigate>
+                        {{ __('Membros') }}
+                    </flux:navbar.item>
+                    <flux:navbar.item icon="bell" :href="route('mensagens')" :current="request()->routeIs('mensagens')" wire:navigate>
+                        {{ __('Mensagens') }}
+                    </flux:navbar.item>
+                @endcan
+                <flux:navbar.item icon="envelope" :href="route('contato')" :current="request()->routeIs('contato')" wire:navigate>
+                    {{ __('Contato') }}
                 </flux:navbar.item>
-                <flux:navbar.item icon="file-import" :href="route('upload')" :current="request()->routeIs('upload')" wire:navigate>
-                    {{ __('Importar OFX') }}
-                </flux:navbar.item>
-                <flux:navbar.item icon="users" :href="route('members.index')" :current="request()->routeIs('members.*')" wire:navigate>
-                    {{ __('Membros') }}
+                <flux:navbar.item icon="user" :href="route('minha-associacao')" :current="request()->routeIs('minha-associacao')" wire:navigate>
+                    {{ __('Minha Associação') }}
                 </flux:navbar.item>
             </flux:navbar>
 
             <flux:spacer />
 
             <flux:navbar class="me-1.5 space-x-0.5 rtl:space-x-reverse py-0!">
-                @php
-                    $failedNotifications = App\Models\NotificationLog::where('status','failed')->count();
-                @endphp
-                @if($failedNotifications > 0)
-                <flux:tooltip :content="__('Notificações falhas')" position="bottom">
-                    <flux:navbar.item class="!h-10 [&>div>svg]:size-5 relative" icon="bell-alert" href="#" :label="__('Alerts')">
-                        <span class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">{{ $failedNotifications }}</span>
-                    </flux:navbar.item>
-                </flux:tooltip>
-                @endif
+                @can('diretor')
+                    @php
+                        $failedNotifications = App\Models\Notificacao::where('ind_enviada', false)->count();
+                    @endphp
+                    @if($failedNotifications > 0)
+                    <flux:tooltip :content="__('Notificações falhas')" position="bottom">
+                        <flux:navbar.item class="!h-10 [&>div>svg]:size-5 relative" icon="bell-alert" :href="route('mensagens')" :label="__('Alerts')" wire:navigate>
+                            <span class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">{{ $failedNotifications }}</span>
+                        </flux:navbar.item>
+                    </flux:tooltip>
+                    @endif
+                @endcan
             </flux:navbar>
 
             <x-desktop-user-menu />
@@ -58,19 +71,32 @@
             </flux:sidebar.header>
 
             <flux:sidebar.nav>
-                <flux:sidebar.group :heading="__('Painel')">
-                    <flux:sidebar.item icon="layout-grid" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
-                        {{ __('Dashboard') }}
-                    </flux:sidebar.item>
-                </flux:sidebar.group>
-                <flux:sidebar.group :heading="__('Financeiro')">
-                    <flux:sidebar.item icon="file-import" :href="route('upload')" :current="request()->routeIs('upload')" wire:navigate>
-                        {{ __('Importar OFX') }}
-                    </flux:sidebar.item>
-                </flux:sidebar.group>
+                @can('diretor')
+                    <flux:sidebar.group :heading="__('Painel')">
+                        <flux:sidebar.item icon="layout-grid" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
+                            {{ __('Dashboard') }}
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+                    <flux:sidebar.group :heading="__('Financeiro')">
+                        <flux:sidebar.item icon="arrow-up-tray" :href="route('upload')" :current="request()->routeIs('upload')" wire:navigate>
+                            {{ __('Importar OFX') }}
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+                @endcan
                 <flux:sidebar.group :heading="__('Cadastros')">
-                    <flux:sidebar.item icon="users" :href="route('members.index')" :current="request()->routeIs('members.*')" wire:navigate>
-                        {{ __('Membros') }}
+                    @can('diretor')
+                        <flux:sidebar.item icon="users" :href="route('members.index')" :current="request()->routeIs('members.*')" wire:navigate>
+                            {{ __('Membros') }}
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="bell" :href="route('mensagens')" :current="request()->routeIs('mensagens')" wire:navigate>
+                            {{ __('Mensagens') }}
+                        </flux:sidebar.item>
+                    @endcan
+                    <flux:sidebar.item icon="envelope" :href="route('contato')" :current="request()->routeIs('contato')" wire:navigate>
+                        {{ __('Contato') }}
+                    </flux:sidebar.item>
+                    <flux:sidebar.item icon="user" :href="route('minha-associacao')" :current="request()->routeIs('minha-associacao')" wire:navigate>
+                        {{ __('Minha Associação') }}
                     </flux:sidebar.item>
                 </flux:sidebar.group>
             </flux:sidebar.nav>

@@ -11,20 +11,22 @@ return new class extends Migration
         Schema::create('membros', function (Blueprint $table) {
             $table->id('idt_membro');
             $table->string('nom_membro');
+            $table->string('nom_ofx')->nullable(); // Nome exato como aparece no extrato OFX. Quando preenchido, tem prioridade sobre nom_membro no matching.
             $table->string('eml_membro')->unique();
             $table->string('tel_membro', 20)->nullable();
             $table->string('end_logradouro', 150)->nullable();       // Bairro/Complemento
             $table->string('end_mumero', 20)->nullable();         // Número/Apartamento
             $table->string('end_complemento', 150)->nullable();      // Rua/Avenida
-            $table->string('tip_associado', 50)->default('regular'); // Tipo de associação
-            $table->string('des_telegram_chat_id', 50)->nullable()->after('whatsapp');
-            $table->boolean('ind_notificar_whatsapp')->default(true)->after('telegram_chat_id');
-            $table->boolean('ind_notificar_email')->default(true)->after('notify_whatsapp');
-            $table->boolean('ind_notificar_telegram')->default(false)->after('notify_email');
+            $table->string('tip_associado', 50)->default('membro'); // Tipo de associação
+            $table->string('des_telegram_chat_id', 50)->nullable();
+            $table->boolean('ind_notificar_whatsapp')->default(true);
+            $table->boolean('ind_notificar_email')->default(true);
+            $table->boolean('ind_notificar_telegram')->default(false);
+
             $table->timestamps();
 
             $table->index('tip_associado');
-            $table->index('name');
+            $table->index('nom_membro');
         });
     }
 

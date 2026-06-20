@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('resumos', function (Blueprint $table) {
             $table->id('idt_resumo');
-            $table->foreignId('idt_ofx')->constrained()->onDelete('cascade');
+            $table->foreignId('idt_ofx')->constrained('ofx', 'idt_ofx')->onDelete('cascade');
             $table->string('nom_pessoa'); // Nome extraído do MEMO
             $table->integer('num_ano');
             $table->integer('num_mes'); // 1-12

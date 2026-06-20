@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Membro;
 
-use App\Enums\TipoAssociado;
+use App\Enums\Perfil;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -22,7 +22,7 @@ class StoreMembroRequest extends FormRequest
             'end_logradouro' => ['nullable', 'string', 'max:150'],
             'end_mumero' => ['nullable', 'string', 'max:20'],
             'end_complemento' => ['nullable', 'string', 'max:150'],
-            'tip_associado' => ['required', 'string', Rule::enum(TipoAssociado::class)],
+            'tip_associado' => ['required', 'string', Rule::enum(Perfil::class)],
             'des_telegram_chat_id' => ['nullable', 'string', 'max:50'],
             'ind_notificar_whatsapp' => ['boolean'],
             'ind_notificar_email' => ['boolean'],

@@ -2,15 +2,14 @@
 
 namespace App\Models;
 
-use App\Enums\TipoAssociado;
+use App\Enums\Perfil;
 use App\Jobs\NotificarBoasVindas;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
-
 class Membro extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory;
+
 
     protected $table = 'membros';
 
@@ -43,7 +42,7 @@ class Membro extends Model
     }
 
     protected $casts = [
-        'tip_associado' => TipoAssociado::class,
+        'tip_associado' => Perfil::class,
         'ind_notificar_whatsapp' => 'boolean',
         'ind_notificar_email' => 'boolean',
         'ind_notificar_telegram' => 'boolean',

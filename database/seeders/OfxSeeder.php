@@ -19,7 +19,7 @@ class OfxSeeder extends Seeder
                 $transacoes = Transacao::factory()
                     ->count(15)
                     ->credito()
-                    ->create(['idt_ofx' => $ofx->id]);
+                    ->create(['idt_ofx' => $ofx->idt_ofx]);
 
                 $total = $transacoes->sum('val_transacao');
 

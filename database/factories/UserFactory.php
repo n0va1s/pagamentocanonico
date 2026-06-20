@@ -29,6 +29,7 @@ class UserFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
+            'role' => \App\Enums\Perfil::MEMBRO,
             'remember_token' => Str::random(10),
             'two_factor_secret' => null,
             'two_factor_recovery_codes' => null,
@@ -55,6 +56,36 @@ class UserFactory extends Factory
             'two_factor_secret' => encrypt('secret'),
             'two_factor_recovery_codes' => encrypt(json_encode(['recovery-code-1'])),
             'two_factor_confirmed_at' => now(),
+        ]);
+    }
+
+    /**
+     * Indicate that the user has the admin role.
+     */
+    public function admin(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => \App\Enums\Perfil::ADMIN,
+        ]);
+    }
+
+    /**
+     * Indicate that the user has the director role.
+     */
+    public function diretor(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => \App\Enums\Perfil::DIRETOR,
+        ]);
+    }
+
+    /**
+     * Indicate that the user has the member role.
+     */
+    public function membro(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => \App\Enums\Perfil::MEMBRO,
         ]);
     }
 }

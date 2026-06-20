@@ -12,7 +12,9 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
-#[Fillable(['name', 'email', 'password'])]
+use App\Enums\Perfil;
+
+#[Fillable(['name', 'email', 'password', 'role'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -29,7 +31,56 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'role' => Perfil::class,
         ];
+    }
+
+    /**
+     * Check if user is an administrator
+     */
+    public function isAdmin(): bool
+    {
+        return $this->role === Perfil::ADMIN;
+    }
+
+    /**
+     * Check if user is a director
+     */
+    public function isDiretor(): bool
+    {
+        return $this->role === Perfil::DIRETOR;
+    }
+
+    /**
+     * Check if user is a member
+     */
+    public function isMembro(): bool
+    {
+        return $this->role === Perfil::MEMBRO;
+    }
+
+    /**
+     * Check if user has one of the specified roles
+     *
+     * @param Perfil|string|array $roles
+     */
+    public function hasRole(Perfil|string|array $roles): bool
+    {
+        if (is_array($roles)) {
+            foreach ($roles as $role) {
+                if ($this->hasRole($role)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        if ($this->role === null) {
+            return false;
+        }
+
+        $roleValue = $roles instanceof Perfil ? $roles->value : $roles;
+        return $this->role->value === $roleValue;
     }
 
     /**

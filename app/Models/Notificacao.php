@@ -8,7 +8,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Notificacao extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory;
+
 
     protected $table = 'notificacoes';
 

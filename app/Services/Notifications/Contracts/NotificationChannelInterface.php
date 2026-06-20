@@ -12,7 +12,8 @@ interface NotificationChannelInterface
      *
      * @return array{success: bool, external_id?: string|null, error?: string}
      */
-    public function send(Membro $membro, string $mensagem, TipoNotificacao $tipo): array;
+    public function send(Membro $membro, string $mensagem, TipoNotificacao $tipo, array $dados = []): array;
+
 
     /**
      * Retorna o identificador do canal (ex: 'whatsapp').

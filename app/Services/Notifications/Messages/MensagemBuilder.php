@@ -18,8 +18,25 @@ class MensagemBuilder
             TipoNotificacao::INADIMPLENTE => $this->inadimplente($membro, $dados),
             TipoNotificacao::ANIVERSARIANTE => $this->aniversariante($membro),
             TipoNotificacao::BOAS_VINDAS => $this->boasVindas($membro),
+            TipoNotificacao::CUSTOM => $dados['message'] ?? $dados['mensagem'] ?? '',
+            TipoNotificacao::QUITACAO_ANUAL => $this->quitacaoAnual($membro, $dados),
         };
     }
+
+    private function quitacaoAnual(Membro $membro, array $dados): string
+    {
+        $ano = $dados['ano'] ?? date('Y');
+
+        return implode("\n\n", [
+            "Prezado(a) {$membro->nom_membro},",
+            "Declaramos, para os devidos fins de direito, que V. Sa. encontra-se em situação de *ADIMPLÊNCIA* perante a Associação dos Servidores da Caixa e da Justiça Eleitoral (ASCAJE) referente a todas as contribuições financeiras ordinárias do ano de *{$ano}*.",
+            "Esta declaração confere plena quitação de suas obrigações associativas para o período supracitado.",
+            "Agradecemos a sua valiosa parceria e colaboração.",
+            "Brasília, " . date('d/m/Y') . ".",
+            "Diretoria Financeira\n_ASCAJE_",
+        ]);
+    }
+
 
     private function inadimplente(Membro $membro, array $dados): string
     {

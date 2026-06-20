@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('transacoes', function (Blueprint $table) {
             $table->id('idt_transacao');
-            $table->foreignId('idt_ofx')->constrained()->onDelete('cascade');
+            $table->foreignId('idt_ofx')->constrained('ofx', 'idt_ofx')->onDelete('cascade');
             $table->string('num_transacao')->nullable(); // ID único da transação no OFX
             $table->date('dat_transacao'); // DTPOSTED
             $table->string('tip_transacao', 20)->nullable(); // TRNTYPE (DEBIT/CREDIT)

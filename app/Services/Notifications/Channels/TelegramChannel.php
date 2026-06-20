@@ -23,7 +23,7 @@ class TelegramChannel implements NotificationChannelInterface
         return 'telegram';
     }
 
-    public function send(Membro $membro, string $mensagem, TipoNotificacao $tipo): array
+    public function send(Membro $membro, string $mensagem, TipoNotificacao $tipo, array $dados = []): array
     {
         $chatId = $membro->des_telegram_chat_id;
 
@@ -79,5 +79,50 @@ class TelegramChannel implements NotificationChannelInterface
             'num_externo' => $externalId,
             'msg_erro' => $erro,
         ]);
+    }
+
+    /**
+     * Envia um formulário de contato enviado via Dashboard para o chat de administração.
+     */
+    public function sendContactRequest(string $nome, string $email, string $mensagem): array
+    {
+        $chatId = config('services.telegram.contact_chat_id') ?: env('TELEGRAM_CONTACT_CHAT_ID', '');
+
+        if (empty($chatId)) {
+            Log::warning('Telegram contact chat ID is not configured.');
+            return ['success' => false, 'error' => 'ID de Chat de Contato do Telegram não configurado no .env (TELEGRAM_CONTACT_CHAT_ID).'];
+        }
+
+        $texto = implode("\n", [
+            "📩 <b>Novo Contato Recebido via Dashboard</b>",
+            "👤 <b>Nome:</b> {$nome}",
+            "✉️ <b>E-mail:</b> {$email}",
+            "💬 <b>Mensagem:</b>",
+            $mensagem
+        ]);
+
+        try {
+            $response = Http::post(
+                "https://api.telegram.org/bot{$this->botToken}/sendMessage",
+                [
+                    'chat_id' => $chatId,
+                    'text' => $texto,
+                    'parse_mode' => 'HTML',
+                ]
+            );
+
+            $data = $response->json();
+
+            if ($response->successful() && ($data['ok'] ?? false)) {
+                return ['success' => true];
+            }
+
+            $erro = $data['description'] ?? 'Erro desconhecido no Telegram.';
+            return ['success' => false, 'error' => $erro];
+
+        } catch (\Exception $e) {
+            Log::error("TelegramChannel (Contato): " . $e->getMessage());
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
     }
 }

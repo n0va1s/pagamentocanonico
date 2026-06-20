@@ -14,7 +14,7 @@ class StoreTransacaoRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'idt_ofx' => ['required', 'integer', 'exists:ofx,id'],
+            'idt_ofx' => ['required', 'integer', 'exists:ofx,idt_ofx'],
             'num_transacao' => ['nullable', 'string', 'max:255', 'unique:transacoes,num_transacao'],
             'dat_transacao' => ['required', 'date'],
             'tip_transacao' => ['nullable', 'string', 'in:CREDIT,DEBIT', 'max:20'],

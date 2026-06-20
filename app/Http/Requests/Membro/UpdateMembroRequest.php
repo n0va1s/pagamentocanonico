@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Membro;
 
-use App\Enums\TipoAssociado;
+use App\Enums\Perfil;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -15,7 +15,7 @@ class UpdateMembroRequest extends FormRequest
 
     public function rules(): array
     {
-        $membroId = $this->route('membro')?->id;
+        $membroId = $this->route('membro')?->idt_membro;
 
         return [
             'nom_membro' => ['sometimes', 'required', 'string', 'max:255'],
@@ -24,7 +24,7 @@ class UpdateMembroRequest extends FormRequest
             'end_logradouro' => ['nullable', 'string', 'max:150'],
             'end_mumero' => ['nullable', 'string', 'max:20'],
             'end_complemento' => ['nullable', 'string', 'max:150'],
-            'tip_associado' => ['sometimes', 'required', 'string', Rule::enum(TipoAssociado::class)],
+            'tip_associado' => ['sometimes', 'required', 'string', Rule::enum(Perfil::class)],
             'des_telegram_chat_id' => ['nullable', 'string', 'max:50'],
             'ind_notificar_whatsapp' => ['boolean'],
             'ind_notificar_email' => ['boolean'],
