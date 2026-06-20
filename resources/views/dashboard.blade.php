@@ -1,428 +1,279 @@
-<x-layouts::app :title="__('Dashboard')">
-    <div class="flex h-full w-full flex-1 flex-col gap-6 p-2">
+<?php
 
-        @if(session('success'))
-            <flux:callout variant="success" icon="check-circle" heading="{{ session('success') }}" class="mb-2" />
-        @endif
-        @if(session('error'))
-            <flux:callout variant="danger" icon="exclamation-triangle" heading="{{ session('error') }}" class="mb-2" />
-        @endif
+use App\Models\Membro;
+use App\Models\Ofx;
+use App\Models\Resumo;
+use App\Models\Transacao;
+use App\Models\Notificacao;
+use App\Enums\TipoNotificacao;
+use App\Enums\Canal;
+use App\Services\Notifications\NotificationDispatcher;
+use App\Services\Notifications\Channels\TelegramChannel;
+use App\Services\Notifications\Channels\WhatsAppChannel;
+use App\Services\Notifications\Channels\EmailChannel;
+use Livewire\Volt\Component;
+use Livewire\Attributes\Title;
 
-        @php
-            $importId = request('import');
-            $imports = App\Models\OfxImport::latest()->get();
-            $selectedImport = $importId ? App\Models\OfxImport::with(['transactions','monthlySummaries'])->find($importId) : $imports->first();
+new #[Title('Dashboard')] class extends Component {
+    public ?int $selectedImportId = null;
 
-            $dashboardData = [];
-            $availableMonths = collect();
-            $chartLabels = [];
-            $chartValues = [];
-            $totalInadimplentes = 0;
-            $totalAdimplentes = 0;
-            $totalRecebido = 0;
+    public function mount(): void
+    {
+        $importId = request()->query('import') ?? request()->query('ofx');
+        if ($importId) {
+            $this->selectedImportId = (int) $importId;
+        } else {
+            $latest = Ofx::latest()->first();
+            $this->selectedImportId = $latest ? $latest->idt_ofx : null;
+        }
+    }
 
-            if($selectedImport) {
-                $summaries = $selectedImport->monthlySummaries()->orderBy('year')->orderBy('month')->get();
-                $availableMonths = $summaries->unique(fn($i) => $i->year.'-'.str_pad($i->month,2,'0',STR_PAD_LEFT))->sortBy(['year','month'])->values();
+    public function updatedSelectedImportId(): void
+    {
+        $this->redirect(route('dashboard', ['import' => $this->selectedImportId]), navigate: true);
+    }
 
-                $monthlyTotals = $summaries->groupBy(fn($i) => $i->month_name.'/'.$i->year)->map->sum('total_amount')->sortKeys();
-                $chartLabels = $monthlyTotals->keys()->values()->toArray();
-                $chartValues = $monthlyTotals->values()->toArray();
+    public function alertMember(int $membroId, string $channel): void
+    {
+        $membro = Membro::findOrFail($membroId);
+        $selectedImport = Ofx::find($this->selectedImportId);
+        if (!$selectedImport) { $this->dispatch('toast', message: 'Nenhuma importação selecionada.', variant: 'danger'); return; }
+        $atrasado = Resumo::where('idt_ofx', $this->selectedImportId)->where('nom_pessoa', $membro->nomeParaMatchingOfx())->where('ind_pago', false)->orderByDesc('num_ano')->orderByDesc('num_mes')->first();
+        $mesRef = $atrasado ? "{$atrasado->nom_mes}/{$atrasado->num_ano}" : 'mês atual';
+        $valorRef = $atrasado ? $atrasado->val_total : 0;
+        $mensagem = app(\App\Services\Notifications\Messages\MensagemBuilder::class)->construir(TipoNotificacao::INADIMPLENTE, $membro, ['mes' => $mesRef, 'valor' => $valorRef]);
+        if ($channel === 'whatsapp' || $channel === 'all') {
+            $wa = app(WhatsAppChannel::class);
+            $res = $wa->send($membro, $mensagem, TipoNotificacao::INADIMPLENTE);
+            if ($res['success'] && isset($res['redirect_url'])) { $this->dispatch('open-wa-link', url: $res['redirect_url']); }
+        }
+        if ($channel === 'email' || $channel === 'all') { app(EmailChannel::class)->send($membro, $mensagem, TipoNotificacao::INADIMPLENTE); }
+        if ($channel === 'telegram' || $channel === 'all') { app(TelegramChannel::class)->send($membro, $mensagem, TipoNotificacao::INADIMPLENTE); }
+        $this->dispatch('toast', message: 'Alerta disparado com sucesso.', variant: 'success');
+    }
 
-                $byPerson = $summaries->groupBy('person_name');
-                foreach($byPerson as $personName => $personData) {
-                    $row = ['name'=>$personName,'months'=>[],'total'=>0,'situation'=>'Adimplente','is_member'=>App\Models\Member::where('name',$personName)->exists()];
-                    foreach($availableMonths as $monthRef) {
-                        $md = $personData->firstWhere(fn($i) => $i->year==$monthRef->year && $i->month==$monthRef->month);
-                        $val = $md ? (float)$md->total_amount : 0;
-                        $row['months'][] = ['value'=>$val,'has_payment'=>$val>0];
-                        $row['total'] += $val;
-                        if($val<=0) $row['situation'] = 'Inadimplente';
-                    }
-                    $totalRecebido += $row['total'];
-                    $row['situation']==='Adimplente' ? $totalAdimplentes++ : $totalInadimplentes++;
-                    $dashboardData[] = $row;
+    public function with(): array
+    {
+        $importacoes = Ofx::latest()->get();
+        $importacaoSelecionada = $this->selectedImportId ? Ofx::with('resumos')->find($this->selectedImportId) : $importacoes->first();
+        $dadosDashboard = [];
+        $mesesDisponiveis = collect();
+        $totalInadimplentes = 0;
+        $totalAdimplentes = 0;
+        $totalRecebido = 0;
+        if ($importacaoSelecionada) {
+            $resumos = $importacaoSelecionada->resumos()->orderBy('num_ano')->orderBy('num_mes')->get();
+            $mesesDisponiveis = $resumos->unique(fn ($r) => $r->num_ano.'-'.str_pad($r->num_mes, 2, '0', STR_PAD_LEFT))->sortBy(['num_ano', 'num_mes'])->values();
+            $porPessoa = $resumos->groupBy('nom_pessoa');
+            foreach ($porPessoa as $nomePessoa => $resumosPessoa) {
+                $membro = Membro::where('nom_ofx', $nomePessoa)->orWhere('nom_membro', $nomePessoa)->first();
+                $linha = ['nome' => $nomePessoa, 'membro_id' => $membro?->idt_membro ?? null, 'is_member' => !is_null($membro), 'meses' => [], 'total' => 0, 'situacao' => 'Adimplente'];
+                foreach ($mesesDisponiveis as $mesRef) {
+                    $resumoMes = $resumosPessoa->firstWhere(fn ($r) => $r->num_ano == $mesRef->num_ano && $r->num_mes == $mesRef->num_mes);
+                    $valor = $resumoMes ? (float) $resumoMes->val_total : 0;
+                    $linha['meses'][] = ['value' => $valor, 'has_payment' => $valor > 0];
+                    $linha['total'] += $valor;
+                    if ($valor <= 0) $linha['situacao'] = 'Inadimplente';
                 }
+                $totalRecebido += $linha['total'];
+                $linha['situacao'] === 'Adimplente' ? $totalAdimplentes++ : $totalInadimplentes++;
+                $dadosDashboard[] = $linha;
             }
+        }
+        return compact('importacoes','importacaoSelecionada','dadosDashboard','mesesDisponiveis','totalRecebido','totalAdimplentes','totalInadimplentes');
+    }
+}; ?>
 
-            $members = App\Models\Member::withCount('notificationLogs')->orderBy('name')->get()->map(function($m) use ($selectedImport) {
-                $m->overdue = $selectedImport && App\Models\MonthlySummary::where('ofx_import_id',$selectedImport->id)->where('person_name',$m->name)->where('has_payment',false)->exists();
-                $m->last_notification = $m->notificationLogs()->latest()->first();
-                return $m;
-            });
+<div class="pc-page" x-data="{}" x-on:open-wa-link.window="window.open($event.detail.url, '_blank')">
 
-            $recentLogs = App\Models\NotificationLog::with('member')->latest()->limit(8)->get();
-        @endphp
-
-        @if($selectedImport)
-        <!-- Seletor de Importação -->
-        <div class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-zinc-900">
-            <div class="flex items-center gap-3">
-                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
-                    <flux:icon name="building-library" class="size-5" />
-                </div>
-                <div>
-                    <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Extrato Selecionado</p>
-                    <p class="text-sm font-bold text-neutral-800 dark:text-neutral-100">{{ $selectedImport->filename }}</p>
-                    <p class="text-xs text-neutral-500 dark:text-neutral-400">
-                        {{ $selectedImport->date_start?->format('d/m/Y') }} – {{ $selectedImport->date_end?->format('d/m/Y') }} • {{ $selectedImport->transaction_count }} transações
-                    </p>
-                </div>
-            </div>
-            @if($imports->count() > 0)
-            <form method="GET" action="{{ route('dashboard') }}" class="flex items-center gap-2">
-                <flux:select name="import" variant="listbox" onchange="this.form.submit()" class="w-64">
-                    @foreach($imports as $imp)
-                        <flux:select.option value="{{ $imp->id }}" :selected="$selectedImport && $selectedImport->id == $imp->id">
-                            {{ $imp->filename }} ({{ $imp->date_start?->format('m/Y') }})
-                        </flux:select.option>
-                    @endforeach
-                </flux:select>
-                <flux:button href="{{ route('upload') }}" icon="plus" size="sm" variant="primary">Novo</flux:button>
-            </form>
-            @endif
+    {{-- Cabeçalho --}}
+    <div class="pc-page-header">
+        <div>
+            <div class="pc-label" style="margin-bottom:0.4rem">Administração</div>
+            <h1 class="pc-page-title">Dashboard</h1>
+            <p class="pc-page-subtitle">Acompanhamento de contribuições por extrato importado.</p>
         </div>
-
-        <!-- Cards -->
-        <div class="grid auto-rows-min gap-4 md:grid-cols-4">
-            <div class="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-zinc-900">
-                <div class="flex items-start justify-between">
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Total Recebido</p>
-                        <p class="mt-1 text-2xl font-bold text-neutral-800 dark:text-neutral-100">R$ {{ number_format($totalRecebido,2,',','.') }}</p>
-                    </div>
-                    <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-green-100 text-green-600 dark:bg-green-900/30">
-                        <flux:icon name="banknotes" class="size-5" />
-                    </div>
-                </div>
-            </div>
-            <div class="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-zinc-900">
-                <div class="flex items-start justify-between">
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Adimplentes</p>
-                        <p class="mt-1 text-2xl font-bold text-green-600">{{ $totalAdimplentes }}</p>
-                    </div>
-                    <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-green-100 text-green-600 dark:bg-green-900/30">
-                        <flux:icon name="check-circle" class="size-5" />
-                    </div>
-                </div>
-            </div>
-            <div class="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-zinc-900">
-                <div class="flex items-start justify-between">
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Inadimplentes</p>
-                        <p class="mt-1 text-2xl font-bold text-red-600">{{ $totalInadimplentes }}</p>
-                    </div>
-                    <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-red-100 text-red-600 dark:bg-red-900/30">
-                        <flux:icon name="exclamation-triangle" class="size-5" />
-                    </div>
-                </div>
-            </div>
-            <div class="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-zinc-900">
-                <div class="flex items-start justify-between">
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Membros</p>
-                        <p class="mt-1 text-2xl font-bold text-blue-600">{{ $members->count() }}</p>
-                    </div>
-                    <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
-                        <flux:icon name="users" class="size-5" />
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Gráfico + Logs -->
-        <div class="grid auto-rows-min gap-4 lg:grid-cols-3">
-            <div class="lg:col-span-2 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-zinc-900">
-                <h3 class="mb-4 text-sm font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300">
-                    <flux:icon name="chart-bar" class="mr-1 inline size-4 text-blue-600" /> Evolução de Recebimentos
-                </h3>
-                <canvas id="revenueChart" height="100"></canvas>
-            </div>
-            <div class="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-zinc-900">
-                <h3 class="mb-4 text-sm font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300">
-                    <flux:icon name="paper-airplane" class="mr-1 inline size-4 text-blue-600" /> Notificações Recentes
-                </h3>
-                <div class="max-h-64 space-y-3 overflow-y-auto pr-1">
-                    @forelse($recentLogs as $log)
-                        <div class="flex items-start gap-3 border-b border-neutral-100 pb-2 text-sm last:border-0 dark:border-neutral-800">
-                            <div class="mt-0.5">
-                                @if($log->channel === 'whatsapp')
-                                    <span class="text-green-500"><i class="fa-brands fa-whatsapp"></i></span>
-                                @elseif($log->channel === 'email')
-                                    <span class="text-blue-500"><i class="fa-solid fa-envelope"></i></span>
-                                @else
-                                    <span class="text-sky-500"><i class="fa-brands fa-telegram"></i></span>
-                                @endif
-                            </div>
-                            <div class="min-w-0 flex-1">
-                                <p class="truncate font-medium text-neutral-800 dark:text-neutral-200">{{ $log->member?->name ?? 'Desconhecido' }}</p>
-                                <p class="text-xs text-neutral-500 dark:text-neutral-400">
-                                    {{ $log->created_at->format('d/m H:i') }} •
-                                    <span class="font-semibold {{ $log->status==='sent' ? 'text-green-600' : 'text-red-500' }}">{{ $log->status==='sent' ? 'Enviado' : 'Falha' }}</span>
-                                </p>
-                            </div>
-                        </div>
-                    @empty
-                        <p class="py-4 text-center text-sm italic text-neutral-400">Nenhuma notificação enviada ainda.</p>
-                    @endforelse
-                </div>
-            </div>
-        </div>
-
-        <!-- Tabela Principal -->
-        <div class="rounded-xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-700 dark:bg-zinc-900">
-            <div class="flex items-center justify-between border-b border-neutral-100 px-5 py-4 dark:border-neutral-800">
-                <h3 class="text-sm font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300">
-                    <flux:icon name="table-cells" class="mr-1 inline size-4 text-blue-600" /> Acompanhamento Mensal por Pagador
-                </h3>
-                <span class="text-xs text-neutral-500">{{ count($dashboardData) }} pagadores</span>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead>
-                        <tr class="bg-neutral-50 text-xs uppercase tracking-wider text-neutral-600 dark:bg-zinc-800/50 dark:text-neutral-400">
-                            <th class="px-4 py-3 text-left font-bold">Pagador (MEMO)</th>
-                            @foreach($availableMonths as $month)
-                                <th class="px-3 py-3 text-center font-bold">{{ $month->month_name }}<span class="block text-[10px] font-normal opacity-60">{{ $month->year }}</span></th>
-                            @endforeach
-                            <th class="px-4 py-3 text-right font-bold">Total</th>
-                            <th class="px-4 py-3 text-center font-bold">Situação</th>
-                            <th class="px-4 py-3 text-center font-bold">Ação</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-neutral-100 dark:divide-neutral-800">
-                        @forelse($dashboardData as $row)
-                            <tr class="transition hover:bg-neutral-50/50 dark:hover:bg-zinc-800/30 {{ $row['situation']==='Inadimplente' ? 'bg-red-50/30 dark:bg-red-900/10' : '' }}">
-                                <td class="px-4 py-3">
-                                    <div class="flex items-center gap-2">
-                                        <div class="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-200 text-xs font-bold text-neutral-600 dark:bg-zinc-700 dark:text-neutral-300">
-                                            {{ strtoupper(substr($row['name'],0,1)) }}
-                                        </div>
-                                        <div>
-                                            <p class="font-semibold text-neutral-800 dark:text-neutral-200">{{ $row['name'] }}</p>
-                                            @if($row['is_member'])
-                                                <span class="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">Membro</span>
-                                            @else
-                                                <span class="inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-500 dark:bg-zinc-800 dark:text-neutral-400">Não cadastrado</span>
-                                            @endif
-                                        </div>
-                                    </div>
-                                </td>
-                                @foreach($row['months'] as $m)
-                                    <td class="px-3 py-3 text-center">
-                                        @if($m['has_payment'])
-                                            <span class="inline-block rounded bg-green-50 px-2 py-1 text-xs font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-400">R$ {{ number_format($m['value'],0,',','.') }}</span>
-                                        @else
-                                            <span class="text-xs font-bold text-neutral-300 dark:text-neutral-600">—</span>
-                                        @endif
-                                    </td>
-                                @endforeach
-                                <td class="px-4 py-3 text-right font-bold text-neutral-700 dark:text-neutral-300">R$ {{ number_format($row['total'],2,',','.') }}</td>
-                                <td class="px-4 py-3 text-center">
-                                    @if($row['situation'] === 'Adimplente')
-                                        <flux:badge color="green" size="sm" icon="check">Adimplente</flux:badge>
-                                    @else
-                                        <flux:badge color="red" size="sm" icon="x-mark">Inadimplente</flux:badge>
-                                    @endif
-                                </td>
-                                <td class="px-4 py-3 text-center">
-                                    @php $memberRecord = App\Models\Member::where('name', $row['name'])->first(); @endphp
-                                    @if($memberRecord && $row['situation'] === 'Inadimplente')
-                                        <form action="{{ route('dashboard.notify') }}" method="POST" class="inline">
-                                            @csrf
-                                            <input type="hidden" name="member_id" value="{{ $memberRecord->id }}">
-                                            <input type="hidden" name="channel" value="all">
-                                            <flux:button type="submit" size="xs" variant="primary" icon="bell">Alertar</flux:button>
-                                        </form>
-                                    @else
-                                        <span class="text-xs text-neutral-300 dark:text-neutral-600">—</span>
-                                    @endif
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="{{ count($availableMonths)+4 }}" class="px-4 py-8 text-center text-neutral-400">
-                                    <flux:icon name="inbox" class="mx-auto mb-2 size-8 opacity-40" />
-                                    Nenhum dado de pagamento encontrado neste extrato.
-                                </td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Membros Cadastrados -->
-        <div class="rounded-xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-700 dark:bg-zinc-900">
-            <div class="flex items-center justify-between border-b border-neutral-100 px-5 py-4 dark:border-neutral-800">
-                <h3 class="text-sm font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300">
-                    <flux:icon name="users" class="mr-1 inline size-4 text-blue-600" /> Base de Membros Cadastrados
-                </h3>
-                <flux:button href="{{ route('members.create') }}" size="sm" variant="primary" icon="plus">Cadastrar</flux:button>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead>
-                        <tr class="bg-neutral-50 text-xs uppercase tracking-wider text-neutral-600 dark:bg-zinc-800/50 dark:text-neutral-400">
-                            <th class="px-4 py-3 text-left font-bold">Membro</th>
-                            <th class="px-4 py-3 text-left font-bold">Contato</th>
-                            <th class="px-4 py-3 text-center font-bold">Tipo</th>
-                            <th class="px-4 py-3 text-center font-bold">Status OFX</th>
-                            <th class="px-4 py-3 text-center font-bold">Último Alerta</th>
-                            <th class="px-4 py-3 text-center font-bold">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-neutral-100 dark:divide-neutral-800">
-                        @forelse($members as $member)
-                            <tr class="transition hover:bg-neutral-50/50 dark:hover:bg-zinc-800/30">
-                                <td class="px-4 py-3">
-                                    <p class="font-semibold text-neutral-800 dark:text-neutral-200">{{ $member->name }}</p>
-                                    <p class="text-xs text-neutral-500 dark:text-neutral-400">{{ Str::limit($member->full_address, 35) }}</p>
-                                </td>
-                                <td class="px-4 py-3 text-xs text-neutral-600 dark:text-neutral-400">
-                                    <div class="space-y-0.5">
-                                        @if($member->email)<div><i class="fa-solid fa-envelope mr-1 w-4 text-neutral-400"></i>{{ $member->email }}</div>@endif
-                                        @if($member->whatsapp)<div><i class="fa-brands fa-whatsapp mr-1 w-4 text-green-500"></i>{{ $member->whatsapp }}</div>@endif
-                                        @if($member->telegram_chat_id)<div><i class="fa-brands fa-telegram mr-1 w-4 text-sky-500"></i>{{ $member->telegram_chat_id }}</div>@endif
-                                    </div>
-                                </td>
-                                <td class="px-4 py-3 text-center">
-                                    <flux:badge size="sm" 
-                                        color="{{ $member->membership_type==='premium' ? 'purple' : ($member->membership_type==='regular' ? 'blue' : ($member->membership_type==='suspended' ? 'red' : 'zinc')) }}"
-                                        class="uppercase">
-                                        {{ $member->membership_type_label }}
-                                    </flux:badge>
-                                </td>
-                                <td class="px-4 py-3 text-center">
-                                    @if($member->overdue)
-                                        <span class="text-xs font-bold text-red-600"><i class="fa-solid fa-circle mr-1 text-[8px]"></i>Inadimplente</span>
-                                    @else
-                                        <span class="text-xs font-bold text-green-600"><i class="fa-solid fa-circle mr-1 text-[8px]"></i>Regular</span>
-                                    @endif
-                                </td>
-                                <td class="px-4 py-3 text-center text-xs text-neutral-500 dark:text-neutral-400">
-                                    @if($member->last_notification)
-                                        {{ $member->last_notification->created_at->diffForHumans() }}
-                                        <span class="block {{ $member->last_notification->status==='sent' ? 'text-green-600' : 'text-red-500' }}">
-                                            {{ $member->last_notification->channel }} • {{ $member->last_notification->status }}
-                                        </span>
-                                    @else
-                                        <span class="text-neutral-400">Nunca alertado</span>
-                                    @endif
-                                </td>
-                                <td class="px-4 py-3 text-center">
-                                    <div class="flex justify-center gap-1">
-                                        @if($member->notify_whatsapp && $member->whatsapp)
-                                            <form action="{{ route('dashboard.notify') }}" method="POST" class="inline">
-                                                @csrf
-                                                <input type="hidden" name="member_id" value="{{ $member->id }}">
-                                                <input type="hidden" name="channel" value="whatsapp">
-                                                <flux:button type="submit" size="xs" class="!bg-green-100 !text-green-700 hover:!bg-green-200 dark:!bg-green-900/30 dark:!text-green-400" title="WhatsApp">
-                                                    <i class="fa-brands fa-whatsapp"></i>
-                                                </flux:button>
-                                            </form>
-                                        @endif
-                                        @if($member->notify_email && $member->email)
-                                            <form action="{{ route('dashboard.notify') }}" method="POST" class="inline">
-                                                @csrf
-                                                <input type="hidden" name="member_id" value="{{ $member->id }}">
-                                                <input type="hidden" name="channel" value="email">
-                                                <flux:button type="submit" size="xs" class="!bg-blue-100 !text-blue-700 hover:!bg-blue-200 dark:!bg-blue-900/30 dark:!text-blue-400" title="E-mail">
-                                                    <i class="fa-solid fa-envelope"></i>
-                                                </flux:button>
-                                            </form>
-                                        @endif
-                                        @if($member->notify_telegram && $member->telegram_chat_id)
-                                            <form action="{{ route('dashboard.notify') }}" method="POST" class="inline">
-                                                @csrf
-                                                <input type="hidden" name="member_id" value="{{ $member->id }}">
-                                                <input type="hidden" name="channel" value="telegram">
-                                                <flux:button type="submit" size="xs" class="!bg-sky-100 !text-sky-700 hover:!bg-sky-200 dark:!bg-sky-900/30 dark:!text-sky-400" title="Telegram">
-                                                    <i class="fa-brands fa-telegram"></i>
-                                                </flux:button>
-                                            </form>
-                                        @endif
-                                        <form action="{{ route('dashboard.notify') }}" method="POST" class="inline">
-                                            @csrf
-                                            <input type="hidden" name="member_id" value="{{ $member->id }}">
-                                            <input type="hidden" name="channel" value="all">
-                                            <flux:button type="submit" size="xs" class="!bg-neutral-100 !text-neutral-700 hover:!bg-neutral-200 dark:!bg-zinc-800 dark:!text-neutral-300" title="Todos os canais">
-                                                <i class="fa-solid fa-bullhorn"></i>
-                                            </flux:button>
-                                        </form>
-                                    </div>
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="6" class="px-4 py-8 text-center text-neutral-400">
-                                    Nenhum membro cadastrado. <a href="{{ route('members.create') }}" class="text-blue-600 underline">Cadastrar agora</a>.
-                                </td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        @else
-        <!-- Estado vazio -->
-        <div class="flex flex-1 flex-col items-center justify-center rounded-xl border border-neutral-200 bg-white p-12 text-center dark:border-neutral-700 dark:bg-zinc-900">
-            <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-900/20">
-                <flux:icon name="arrow-up-tray" class="size-8 text-blue-600" />
-            </div>
-            <h3 class="text-lg font-bold text-neutral-800 dark:text-neutral-100">Nenhum extrato OFX importado</h3>
-            <p class="mx-auto mb-6 mt-2 max-w-md text-sm text-neutral-500 dark:text-neutral-400">
-                Importe seu primeiro extrato do Banco do Brasil para visualizar o acompanhamento mensal, identificar inadimplentes e disparar notificações.
-            </p>
-            <flux:button href="{{ route('upload') }}" variant="primary" icon="arrow-up-tray">Importar Extrato OFX</flux:button>
-        </div>
-        @endif
+        <a href="{{ route('upload') }}" class="pc-btn pc-btn-primary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Importar OFX
+        </a>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <script>
-        @if($selectedImport && count($chartLabels) > 0)
-        const ctx = document.getElementById('revenueChart').getContext('2d');
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: @json($chartLabels),
-                datasets: [{
-                    label: 'Recebimentos (R$)',
-                    data: @json($chartValues),
-                    backgroundColor: 'rgba(59, 130, 246, 0.7)',
-                    borderColor: 'rgba(59, 130, 246, 1)',
-                    borderWidth: 1,
-                    borderRadius: 4,
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return 'R$ ' + context.parsed.y.toLocaleString('pt-BR', {minimumFractionDigits: 2});
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            callback: function(value) {
-                                return 'R$ ' + value.toLocaleString('pt-BR');
-                            }
-                        }
-                    }
-                }
-            }
-        });
-        @endif
-    </script>
-</x-layouts::app>
+    @if($importacaoSelecionada)
+
+        {{-- Seletor de importação --}}
+        <div class="pc-import-bar">
+            <div class="pc-import-bar-info">
+                <div class="pc-import-bar-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                </div>
+                <div>
+                    <div class="pc-import-bar-name">{{ $importacaoSelecionada->des_arquivo }}</div>
+                    <div class="pc-import-bar-meta">
+                        {{ $importacaoSelecionada->dat_inicio?->format('d/m/Y') }} – {{ $importacaoSelecionada->dat_fim?->format('d/m/Y') }}
+                        · {{ $importacaoSelecionada->qtd_transacao }} transações
+                    </div>
+                </div>
+            </div>
+            <div class="pc-import-bar-actions">
+                @if($importacoes->count() > 0)
+                    <flux:select wire:model.live="selectedImportId" style="min-width:220px">
+                        @foreach($importacoes as $imp)
+                            <flux:select.option value="{{ $imp->idt_ofx }}">
+                                {{ $imp->des_arquivo }} ({{ $imp->dat_inicio?->format('m/Y') }})
+                            </flux:select.option>
+                        @endforeach
+                    </flux:select>
+                @endif
+            </div>
+        </div>
+
+        {{-- Stats --}}
+        <div class="pc-stats">
+            <div class="pc-stat">
+                <div>
+                    <div class="pc-stat-label">Total recebido</div>
+                    <div class="pc-stat-value" style="font-size:1.3rem">R$ {{ number_format($totalRecebido,2,',','.') }}</div>
+                </div>
+                <div class="pc-stat-icon green">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                </div>
+            </div>
+            <div class="pc-stat">
+                <div>
+                    <div class="pc-stat-label">Adimplentes</div>
+                    <div class="pc-stat-value green">{{ $totalAdimplentes }}</div>
+                </div>
+                <div class="pc-stat-icon green">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+            </div>
+            <div class="pc-stat">
+                <div>
+                    <div class="pc-stat-label">Inadimplentes</div>
+                    <div class="pc-stat-value red">{{ $totalInadimplentes }}</div>
+                </div>
+                <div class="pc-stat-icon red">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+                </div>
+            </div>
+            <div class="pc-stat">
+                <div>
+                    <div class="pc-stat-label">Total de membros</div>
+                    <div class="pc-stat-value blue">{{ App\Models\Membro::count() }}</div>
+                </div>
+                <div class="pc-stat-icon blue">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+            </div>
+        </div>
+
+        {{-- Tabela mensal --}}
+        <div class="pc-card">
+            <div class="pc-card-header">
+                <span class="pc-card-title">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>
+                    Acompanhamento mensal por pagador
+                </span>
+                <span style="font-size:0.78rem;color:var(--pc-subtle)">{{ count($dadosDashboard) }} pagadores</span>
+            </div>
+            <div style="overflow-x:auto">
+                <table class="pc-table">
+                    <thead>
+                        <tr>
+                            <th>Pagador</th>
+                            @foreach($mesesDisponiveis as $month)
+                                <th style="text-align:center">{{ $month->nom_mes }}<span style="display:block;font-size:0.65rem;font-weight:400;opacity:0.65;letter-spacing:0">{{ $month->num_ano }}</span></th>
+                            @endforeach
+                            <th style="text-align:right">Total</th>
+                            <th style="text-align:center">Situação</th>
+                            <th style="text-align:center">Alertar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($dadosDashboard as $row)
+                        <tr wire:key="row-{{ $loop->index }}" style="{{ $row['situacao']==='Inadimplente' ? 'background:#fffaf8' : '' }}">
+                            <td>
+                                <div style="display:flex;align-items:center;gap:0.625rem">
+                                    <div class="pc-avatar">{{ strtoupper(substr($row['nome'],0,1)) }}</div>
+                                    <div>
+                                        <div style="font-weight:600;color:var(--pc-text);font-size:0.875rem">{{ $row['nome'] }}</div>
+                                        @if($row['is_member'])
+                                            <span class="pc-badge blue" style="font-size:0.6rem;padding:0.1rem 0.4rem">Membro</span>
+                                        @else
+                                            <span class="pc-badge muted" style="font-size:0.6rem;padding:0.1rem 0.4rem">Não cadastrado</span>
+                                        @endif
+                                    </div>
+                                </div>
+                            </td>
+                            @foreach($row['meses'] as $m)
+                            <td style="text-align:center">
+                                @if($m['has_payment'])
+                                    <span style="display:inline-block;background:var(--pc-green-lt);color:var(--pc-green);font-size:0.75rem;font-weight:600;padding:0.2rem 0.5rem;border-radius:4px;white-space:nowrap">
+                                        R$&nbsp;{{ number_format($m['value'],0,',','.') }}
+                                    </span>
+                                @else
+                                    <span style="color:var(--pc-border);font-weight:700;font-size:0.9rem">—</span>
+                                @endif
+                            </td>
+                            @endforeach
+                            <td style="text-align:right;font-weight:700;color:var(--pc-text);font-variant-numeric:tabular-nums;white-space:nowrap">
+                                R$ {{ number_format($row['total'],2,',','.') }}
+                            </td>
+                            <td style="text-align:center">
+                                @if($row['situacao'] === 'Adimplente')
+                                    <span class="pc-badge green">Em dia</span>
+                                @else
+                                    <span class="pc-badge red">Pendente</span>
+                                @endif
+                            </td>
+                            <td style="text-align:center">
+                                @if($row['is_member'] && $row['situacao'] === 'Inadimplente')
+                                <div style="display:flex;justify-content:center;gap:0.375rem">
+                                    <button class="pc-btn pc-btn-ghost pc-btn-sm" style="padding:0.3rem 0.5rem" wire:click="alertMember({{ $row['membro_id'] }}, 'whatsapp')" title="Enviar via WhatsApp">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.43 2 2 0 0 1 3.6 1.27h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.8a16 16 0 0 0 6.29 6.29l.95-.95a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                                    </button>
+                                    <button class="pc-btn pc-btn-ghost pc-btn-sm" style="padding:0.3rem 0.5rem" wire:click="alertMember({{ $row['membro_id'] }}, 'email')" title="Enviar por e-mail">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                                    </button>
+                                </div>
+                                @else
+                                    <span style="color:var(--pc-border);font-size:0.875rem">—</span>
+                                @endif
+                            </td>
+                        </tr>
+                        @empty
+                        <tr>
+                            <td colspan="{{ count($mesesDisponiveis) + 4 }}" style="padding:4rem 1rem">
+                                <div class="pc-empty" style="padding:0">
+                                    <div class="pc-empty-icon" style="margin-bottom:0.75rem">
+                                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg>
+                                    </div>
+                                    <div class="pc-empty-title">Nenhum dado encontrado</div>
+                                    <div class="pc-empty-desc">Nenhum pagamento registrado neste extrato.</div>
+                                </div>
+                            </td>
+                        </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    @else
+        {{-- Estado vazio --}}
+        <div class="pc-card" style="padding:5rem 2rem">
+            <div class="pc-empty">
+                <div class="pc-empty-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                </div>
+                <div class="pc-empty-title">Nenhum extrato importado</div>
+                <div class="pc-empty-desc" style="max-width:38ch;margin:0 auto 1.5rem">Importe o primeiro arquivo OFX para visualizar o acompanhamento mensal e identificar inadimplentes.</div>
+                <a href="{{ route('upload') }}" class="pc-btn pc-btn-primary">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    Importar extrato OFX
+                </a>
+            </div>
+        </div>
+    @endif
+</div>

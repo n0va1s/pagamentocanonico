@@ -14,30 +14,14 @@ new #[Title('Mensagens')] class extends Component {
     use WithPagination;
 
     public string $busca = '';
-
-    // Bulk Message Form
-    public string $bulkTarget = 'associados'; // associados, adimplentes, inadimplentes
-    public array $bulkChannels = ['email']; // email, whatsapp
+    public string $bulkTarget = 'associados';
+    public array $bulkChannels = ['email'];
     public string $bulkSubject = '';
     public string $bulkMessage = '';
-
-    // Generated WhatsApp Web Links to open manually
     public array $generatedWaLinks = [];
 
-    public function updatedBusca(): void
-    {
-        $this->resetPage();
-    }
+    public function updatedBusca(): void { $this->resetPage(); }
 
-    public function reprocessar(int $id): void
-    {
-        // Placeholder or actual logic for retrying notification if needed
-        $this->dispatch('toast', message: 'Mensagem agendada para reenvio!', variant: 'success');
-    }
-
-    /**
-     * Send bulk message
-     */
     public function sendBulkMessage(): void
     {
         $this->validate([
@@ -46,149 +30,75 @@ new #[Title('Mensagens')] class extends Component {
             'bulkTarget' => 'required|in:associados,adimplentes,inadimplentes',
             'bulkChannels' => 'required|array|min:1',
         ]);
-
         $selectedImport = Ofx::latest()->first();
-        if (!$selectedImport && ($this->bulkTarget === 'adimplentes' || $this->bulkTarget === 'inadimplentes')) {
-            $this->dispatch('toast', message: 'Selecione um extrato OFX para filtrar adimplência.', variant: 'danger');
-            return;
+        if (!$selectedImport && in_array($this->bulkTarget, ['adimplentes','inadimplentes'])) {
+            $this->dispatch('toast', message: 'Nenhum extrato OFX encontrado.', variant: 'danger'); return;
         }
-
         $allMembers = Membro::all();
         $targetMembers = collect();
-
         if ($this->bulkTarget === 'associados') {
             $targetMembers = $allMembers;
         } else {
             $resumos = $selectedImport->resumos;
             $uniqueMonths = $resumos->unique(fn ($r) => $r->num_ano.'-'.$r->num_mes)->values();
-
-            $adimplentes = collect();
-            $inadimplentes = collect();
-
+            $adimplentes = collect(); $inadimplentes = collect();
             foreach ($allMembers as $membro) {
                 $nomeMatching = $membro->nomeParaMatchingOfx();
                 $resumosPessoa = $resumos->where('nom_pessoa', $nomeMatching);
-                $isAdimplente = true;
-
-                if ($uniqueMonths->isEmpty()) {
-                    $isAdimplente = false;
-                } else {
+                $isAdimplente = !$uniqueMonths->isEmpty();
+                if ($isAdimplente) {
                     foreach ($uniqueMonths as $mesRef) {
-                        $resumoMes = $resumosPessoa->firstWhere(
-                            fn ($r) => $r->num_ano == $mesRef->num_ano && $r->num_mes == $mesRef->num_mes
-                        );
-                        $valor = $resumoMes ? (float) $resumoMes->val_total : 0;
-                        if ($valor <= 0) {
-                            $isAdimplente = false;
-                            break;
-                        }
+                        $resumoMes = $resumosPessoa->firstWhere(fn ($r) => $r->num_ano == $mesRef->num_ano && $r->num_mes == $mesRef->num_mes);
+                        if (!$resumoMes || (float)$resumoMes->val_total <= 0) { $isAdimplente = false; break; }
                     }
                 }
-
-                if ($isAdimplente) {
-                    $adimplentes->push($membro);
-                } else {
-                    $inadimplentes->push($membro);
-                }
+                $isAdimplente ? $adimplentes->push($membro) : $inadimplentes->push($membro);
             }
-
             $targetMembers = $this->bulkTarget === 'adimplentes' ? $adimplentes : $inadimplentes;
         }
-
-        if ($targetMembers->isEmpty()) {
-            $this->dispatch('toast', message: 'Nenhum membro encontrado no grupo selecionado.', variant: 'warning');
-            return;
-        }
-
+        if ($targetMembers->isEmpty()) { $this->dispatch('toast', message: 'Nenhum membro no grupo selecionado.', variant: 'warning'); return; }
         $this->generatedWaLinks = [];
-
         foreach ($targetMembers as $membro) {
             if (in_array('email', $this->bulkChannels) && filled($membro->eml_membro)) {
-                $emailChannel = app(EmailChannel::class);
-                $emailChannel->send($membro, $this->bulkMessage, TipoNotificacao::CUSTOM, ['subject' => $this->bulkSubject]);
+                app(EmailChannel::class)->send($membro, $this->bulkMessage, TipoNotificacao::CUSTOM, ['subject' => $this->bulkSubject]);
             }
-
             if (in_array('whatsapp', $this->bulkChannels) && filled($membro->tel_membro)) {
-                $waChannel = app(WhatsAppChannel::class);
-                $res = $waChannel->send($membro, $this->bulkMessage, TipoNotificacao::CUSTOM);
+                $res = app(WhatsAppChannel::class)->send($membro, $this->bulkMessage, TipoNotificacao::CUSTOM);
                 if ($res['success'] && isset($res['redirect_url'])) {
-                    $this->generatedWaLinks[] = [
-                        'name' => $membro->nom_membro,
-                        'url' => $res['redirect_url']
-                    ];
+                    $this->generatedWaLinks[] = ['name' => $membro->nom_membro, 'url' => $res['redirect_url']];
                 }
             }
         }
-
-        $this->dispatch('toast', message: 'Disparos em massa concluídos!', variant: 'success');
-        
-        if (count($this->generatedWaLinks) === 0) {
-            $this->reset(['bulkSubject', 'bulkMessage']);
-        }
+        $this->dispatch('toast', message: 'Disparos concluídos com sucesso!', variant: 'success');
+        if (count($this->generatedWaLinks) === 0) { $this->reset(['bulkSubject', 'bulkMessage']); }
     }
 
-    /**
-     * Send annual discharge email
-     */
     public function sendAnnualDischarge(): void
     {
         $selectedImport = Ofx::latest()->first();
-        if (!$selectedImport) {
-            $this->dispatch('toast', message: 'Selecione um extrato OFX para identificar os adimplentes.', variant: 'danger');
-            return;
-        }
-
-        $allMembers = Membro::all();
-        $adimplentes = collect();
-
+        if (!$selectedImport) { $this->dispatch('toast', message: 'Nenhum extrato OFX disponível.', variant: 'danger'); return; }
         $resumos = $selectedImport->resumos;
         $uniqueMonths = $resumos->unique(fn ($r) => $r->num_ano.'-'.$r->num_mes)->values();
-
-        if ($uniqueMonths->isEmpty()) {
-            $this->dispatch('toast', message: 'Nenhum mês de referência encontrado na importação.', variant: 'warning');
-            return;
-        }
-
-        foreach ($allMembers as $membro) {
+        if ($uniqueMonths->isEmpty()) { $this->dispatch('toast', message: 'Nenhum mês de referência na importação.', variant: 'warning'); return; }
+        $adimplentes = collect();
+        foreach (Membro::all() as $membro) {
             $nomeMatching = $membro->nomeParaMatchingOfx();
             $resumosPessoa = $resumos->where('nom_pessoa', $nomeMatching);
             $isAdimplente = true;
-
             foreach ($uniqueMonths as $mesRef) {
-                $resumoMes = $resumosPessoa->firstWhere(
-                    fn ($r) => $r->num_ano == $mesRef->num_ano && $r->num_mes == $mesRef->num_mes
-                );
-                $valor = $resumoMes ? (float) $resumoMes->val_total : 0;
-                if ($valor <= 0) {
-                    $isAdimplente = false;
-                    break;
-                }
+                $resumoMes = $resumosPessoa->firstWhere(fn ($r) => $r->num_ano == $mesRef->num_ano && $r->num_mes == $mesRef->num_mes);
+                if (!$resumoMes || (float)$resumoMes->val_total <= 0) { $isAdimplente = false; break; }
             }
-
-            if ($isAdimplente) {
-                $adimplentes->push($membro);
-            }
+            if ($isAdimplente) $adimplentes->push($membro);
         }
-
-        if ($adimplentes->isEmpty()) {
-            $this->dispatch('toast', message: 'Nenhum membro adimplente encontrado neste período.', variant: 'warning');
-            return;
-        }
-
+        if ($adimplentes->isEmpty()) { $this->dispatch('toast', message: 'Nenhum membro adimplente encontrado.', variant: 'warning'); return; }
         $anoRef = $uniqueMonths->first()?->num_ano ?? date('Y');
         $emailChannel = app(EmailChannel::class);
-
         foreach ($adimplentes as $membro) {
-            $mensagem = app(\App\Services\Notifications\Messages\MensagemBuilder::class)->construir(
-                TipoNotificacao::QUITACAO_ANUAL,
-                $membro,
-                ['ano' => $anoRef]
-            );
-
+            $mensagem = app(\App\Services\Notifications\Messages\MensagemBuilder::class)->construir(TipoNotificacao::QUITACAO_ANUAL, $membro, ['ano' => $anoRef]);
             $emailChannel->send($membro, $mensagem, TipoNotificacao::QUITACAO_ANUAL);
         }
-
-        $this->dispatch('toast', message: 'E-mails de quitação anual enviados com sucesso!', variant: 'success');
+        $this->dispatch('toast', message: 'E-mails de quitação anual enviados!', variant: 'success');
     }
 
     public function with(): array
@@ -199,185 +109,209 @@ new #[Title('Mensagens')] class extends Component {
                   ->orWhere('txt_conteudo', 'like', "%{$this->busca}%")
                   ->orWhere('tip_canal', 'like', "%{$this->busca}%");
             })
-            ->latest()
-            ->paginate(15);
-
-        return [
-            'mensagens' => $mensagens,
-        ];
+            ->latest()->paginate(15);
+        return ['mensagens' => $mensagens];
     }
 }; ?>
 
-<div class="flex h-full w-full flex-1 flex-col gap-6 p-6" x-data="{}" x-on:open-wa-link.window="window.open($event.detail.url, '_blank')">
+<div class="pc-page" x-data="{}" x-on:open-wa-link.window="window.open($event.detail.url,'_blank')">
 
-    {{-- Toast alerts --}}
-    @persist('toast')
-        <flux:toast.group>
-            <flux:toast />
-        </flux:toast.group>
-    @endpersist
-
-    {{-- Cabeçalho --}}
-    <div class="flex items-center justify-between">
-        <flux:heading size="xl">Mensagens</flux:heading>
+    <div class="pc-page-header">
+        <div>
+            <div class="pc-label" style="margin-bottom:0.4rem">Comunicação</div>
+            <h1 class="pc-page-title">Mensagens</h1>
+            <p class="pc-page-subtitle">Histórico de envios e disparo de notificações em massa.</p>
+        </div>
     </div>
 
-    <div class="grid gap-6 lg:grid-cols-3">
-        {{-- Tabela de Histórico (Esquerda) --}}
-        <div class="lg:col-span-2 space-y-6">
-            {{-- Filtros --}}
-            <flux:card>
-                <flux:input
-                    wire:model.live.debounce.300ms="busca"
-                    placeholder="Buscar por membro, conteúdo ou canal..."
-                    icon="magnifying-glass"
-                    clearable
-                />
-            </flux:card>
+    <div style="display:grid;grid-template-columns:1fr 320px;gap:1.5rem;align-items:start" class="msg-grid">
+
+        {{-- ── Histórico ── --}}
+        <div style="display:flex;flex-direction:column;gap:1.25rem">
+
+            {{-- Busca --}}
+            <div class="pc-card">
+                <div class="pc-card-body" style="padding:0.875rem 1.25rem">
+                    <flux:input
+                        wire:model.live.debounce.300ms="busca"
+                        placeholder="Buscar por membro, canal ou conteúdo..."
+                        icon="magnifying-glass"
+                        clearable
+                    />
+                </div>
+            </div>
 
             {{-- Tabela --}}
-            <flux:card class="p-0 overflow-hidden">
-                <div class="border-b border-neutral-100 px-5 py-4 dark:border-neutral-800 bg-neutral-50/50 dark:bg-zinc-800/20">
-                    <h3 class="text-sm font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300">
-                        Histórico de Mensagens Enviadas
-                    </h3>
+            <div class="pc-card">
+                <div class="pc-card-header">
+                    <span class="pc-card-title">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        Histórico de envios
+                    </span>
+                    <span style="font-size:0.78rem;color:var(--pc-subtle)">{{ $mensagens->total() }} registros</span>
                 </div>
-                <flux:table>
-                    <flux:table.columns>
-                        <flux:table.column>Membro</flux:table.column>
-                        <flux:table.column>Canal</flux:table.column>
-                        <flux:table.column>Conteúdo</flux:table.column>
-                        <flux:table.column>Status</flux:table.column>
-                        <flux:table.column>Data / Hora</flux:table.column>
-                    </flux:table.columns>
 
-                    <flux:table.rows>
-                        @forelse ($mensagens as $msg)
-                            <flux:table.row wire:key="{{ $msg->idt_notificacao }}">
-
-                                <flux:table.cell class="font-medium">
-                                    {{ $msg->membro?->nom_membro ?? 'Membro Removido' }}
-                                </flux:table.cell>
-
-                                <flux:table.cell>
-                                    <div class="flex items-center gap-1.5 capitalize text-xs">
-                                        @if($msg->tip_canal === 'whatsapp')
-                                            <span class="text-green-500"><i class="fa-brands fa-whatsapp text-sm mr-1"></i>WhatsApp</span>
-                                        @elseif($msg->tip_canal === 'email')
-                                            <span class="text-blue-500"><i class="fa-solid fa-envelope text-sm mr-1"></i>E-mail</span>
-                                        @else
-                                            <span class="text-sky-500"><i class="fa-brands fa-telegram text-sm mr-1"></i>Telegram</span>
-                                        @endif
-                                    </div>
-                                </flux:table.cell>
-
-                                <flux:table.cell class="max-w-xs truncate text-zinc-500" title="{{ $msg->txt_conteudo }}">
-                                    {{ $msg->txt_conteudo }}
-                                </flux:table.cell>
-
-                                <flux:table.cell>
-                                    @if ($msg->ind_enviada)
-                                        <flux:badge color="green" size="sm" icon="check">Enviado</flux:badge>
+                @if($mensagens->isEmpty())
+                    <div class="pc-empty">
+                        <div class="pc-empty-icon">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        </div>
+                        <div class="pc-empty-title">Nenhuma mensagem</div>
+                        <div class="pc-empty-desc">O histórico de envios aparecerá aqui.</div>
+                    </div>
+                @else
+                <div style="overflow-x:auto">
+                    <table class="pc-table">
+                        <thead>
+                            <tr>
+                                <th>Membro</th>
+                                <th>Canal</th>
+                                <th>Mensagem</th>
+                                <th>Status</th>
+                                <th>Data</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($mensagens as $msg)
+                            <tr wire:key="{{ $msg->idt_notificacao }}">
+                                <td class="cell-primary" style="white-space:nowrap">{{ $msg->membro?->nom_membro ?? '—' }}</td>
+                                <td style="white-space:nowrap">
+                                    @if($msg->tip_canal === 'whatsapp')
+                                        <span class="pc-badge green">WhatsApp</span>
+                                    @elseif($msg->tip_canal === 'email')
+                                        <span class="pc-badge blue">E-mail</span>
                                     @else
-                                        <div class="flex flex-col gap-0.5">
-                                            <flux:badge color="red" size="sm" icon="x-mark" title="{{ $msg->msg_erro }}">Falha</flux:badge>
+                                        <span class="pc-badge muted">Telegram</span>
+                                    @endif
+                                </td>
+                                <td style="max-width:300px">
+                                    <p style="font-size:0.8rem;color:var(--pc-muted);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical" title="{{ $msg->txt_conteudo }}">{{ $msg->txt_conteudo }}</p>
+                                </td>
+                                <td style="white-space:nowrap">
+                                    @if($msg->ind_enviada)
+                                        <span class="pc-badge green">Enviado</span>
+                                    @else
+                                        <div>
+                                            <span class="pc-badge red">Falha</span>
                                             @if($msg->msg_erro)
-                                                <span class="text-[10px] text-red-500 max-w-xs truncate">{{ $msg->msg_erro }}</span>
+                                                <div style="font-size:0.7rem;color:var(--pc-red);margin-top:0.2rem;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ $msg->msg_erro }}">{{ $msg->msg_erro }}</div>
                                             @endif
                                         </div>
                                     @endif
-                                </flux:table.cell>
-
-                                <flux:table.cell class="text-zinc-500">
-                                    {{ $msg->created_at->format('d/m/Y H:i') }}
-                                </flux:table.cell>
-
-                            </flux:table.row>
-                        @empty
-                            <flux:table.row>
-                                <flux:table.cell colspan="5" class="py-12 text-center text-zinc-400">
-                                    Nenhuma mensagem enviada encontrada.
-                                </flux:table.cell>
-                            </flux:table.row>
-                        @endforelse
-                    </flux:table.rows>
-                </flux:table>
-
-                @if ($mensagens->hasPages())
-                    <div class="px-4 py-3 border-t border-zinc-200 dark:border-zinc-700">
-                        {{ $mensagens->links() }}
-                    </div>
+                                </td>
+                                <td class="cell-mono" style="white-space:nowrap">
+                                    <span style="font-size:0.8125rem;color:var(--pc-text)">{{ $msg->created_at->format('d/m/Y') }}</span>
+                                    <span style="display:block;font-size:0.72rem;color:var(--pc-subtle)">{{ $msg->created_at->format('H:i') }}</span>
+                                </td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                @if($mensagens->hasPages())
+                    <div style="padding:0.875rem 1.25rem;border-top:1px solid var(--pc-border)">{{ $mensagens->links() }}</div>
                 @endif
-            </flux:card>
+                @endif
+            </div>
         </div>
 
-        {{-- Disparos de Mensagens (Direita) --}}
-        <div class="space-y-6">
-            {{-- Formulário de Disparo em Massa --}}
-            <flux:card class="p-5">
-                <h3 class="text-sm font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300 flex items-center gap-2 mb-4">
-                    <flux:icon name="chat-bubble-left-right" class="size-4 text-blue-600" /> Disparo de Mensagem em Massa
-                </h3>
-                <form wire:submit="sendBulkMessage" class="space-y-4">
-                    <flux:select label="Destinatários" wire:model="bulkTarget">
-                        <flux:select.option value="associados">Todos os Associados (Base Geral)</flux:select.option>
-                        <flux:select.option value="adimplentes">Todos os Adimplentes (Período Selecionado)</flux:select.option>
-                        <flux:select.option value="inadimplentes">Todos os Inadimplentes (Período Selecionado)</flux:select.option>
-                    </flux:select>
+        {{-- ── Painel lateral ── --}}
+        <div style="display:flex;flex-direction:column;gap:1.25rem">
 
-                    <div class="space-y-2">
-                        <p class="text-xs font-semibold text-neutral-600 dark:text-neutral-400">Canais de Envio</p>
-                        <div class="flex items-center gap-4">
-                            <label class="inline-flex items-center text-sm font-medium text-neutral-700 dark:text-neutral-300 cursor-pointer">
-                                <input type="checkbox" value="email" wire:model="bulkChannels" class="rounded border-neutral-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50 mr-2">
-                                E-mail (ascaje@gmail.com)
-                            </label>
-                            <label class="inline-flex items-center text-sm font-medium text-neutral-700 dark:text-neutral-300 cursor-pointer">
-                                <input type="checkbox" value="whatsapp" wire:model="bulkChannels" class="rounded border-neutral-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50 mr-2">
-                                WhatsApp Web
-                            </label>
-                        </div>
-                    </div>
-
-                    <flux:input label="Assunto (Apenas para E-mail)" wire:model="bulkSubject" placeholder="Digite o assunto do e-mail..." />
-
-                    <flux:textarea label="Mensagem" wire:model="bulkMessage" rows="5" placeholder="Escreva a mensagem aqui..." />
-
-                    <flux:button type="submit" variant="primary" class="w-full" icon="paper-airplane">Enviar Mensagem</flux:button>
-                </form>
-            </flux:card>
-
-            {{-- Links Gerados de WhatsApp (Exibe quando dispara para WhatsApp em massa) --}}
-            @if(count($generatedWaLinks) > 0)
-            <flux:card class="p-5 border-green-500/30 dark:border-green-500/20 bg-green-500/5">
-                <h3 class="text-sm font-bold uppercase tracking-wider text-green-700 dark:text-green-400 flex items-center gap-2 mb-3">
-                    <flux:icon name="phone" class="size-4" /> Links do WhatsApp Web Gerados
-                </h3>
-                <p class="text-xs text-neutral-500 mb-4">Clique nos botões abaixo para abrir cada conversa no WhatsApp Web e enviar a mensagem manualmente:</p>
-                <div class="max-h-60 space-y-2 overflow-y-auto pr-1">
-                    @foreach($generatedWaLinks as $waLink)
-                        <div class="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-zinc-800 border border-neutral-100 dark:border-neutral-700 shadow-sm text-xs">
-                            <span class="font-semibold text-neutral-800 dark:text-neutral-200 truncate flex-1 mr-2">{{ $waLink['name'] }}</span>
-                            <flux:button href="{{ $waLink['url'] }}" target="_blank" size="xs" variant="primary" icon="phone">Enviar</flux:button>
-                        </div>
-                    @endforeach
+            {{-- Disparo em massa --}}
+            <div class="pc-card">
+                <div class="pc-card-header">
+                    <span class="pc-card-title">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        Disparo em massa
+                    </span>
                 </div>
-                <flux:button wire:click="$set('generatedWaLinks', [])" size="xs" variant="ghost" class="mt-4 w-full">Limpar Lista</flux:button>
-            </flux:card>
+                <div class="pc-card-body">
+                    <form wire:submit="sendBulkMessage" style="display:flex;flex-direction:column;gap:1rem">
+
+                        <flux:select label="Destinatários" wire:model="bulkTarget">
+                            <flux:select.option value="associados">Todos os associados</flux:select.option>
+                            <flux:select.option value="adimplentes">Apenas adimplentes</flux:select.option>
+                            <flux:select.option value="inadimplentes">Apenas inadimplentes</flux:select.option>
+                        </flux:select>
+
+                        <div>
+                            <div class="pc-label" style="margin-bottom:0.625rem">Canais de envio</div>
+                            <div style="display:flex;flex-direction:column;gap:0.5rem">
+                                <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;font-weight:500;color:var(--pc-text);cursor:pointer">
+                                    <input type="checkbox" value="email" wire:model="bulkChannels" style="accent-color:var(--pc-accent)"> E-mail
+                                </label>
+                                <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;font-weight:500;color:var(--pc-text);cursor:pointer">
+                                    <input type="checkbox" value="whatsapp" wire:model="bulkChannels" style="accent-color:var(--pc-accent)"> WhatsApp Web
+                                </label>
+                            </div>
+                        </div>
+
+                        <flux:input label="Assunto (e-mail)" wire:model="bulkSubject" placeholder="Assunto da mensagem..." />
+                        <flux:textarea label="Mensagem" wire:model="bulkMessage" rows="4" placeholder="Conteúdo da mensagem..." />
+
+                        <button type="submit" class="pc-btn pc-btn-primary" style="width:100%;justify-content:center">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                            Enviar mensagem
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            {{-- Links WhatsApp gerados --}}
+            @if(count($generatedWaLinks) > 0)
+            <div class="pc-card" style="border-color:#a8d9be">
+                <div class="pc-card-header" style="background:var(--pc-green-lt)">
+                    <span class="pc-card-title" style="color:var(--pc-green)">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.43 2 2 0 0 1 3.6 1.27h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.8a16 16 0 0 0 6.29 6.29l.95-.95a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                        Links gerados ({{ count($generatedWaLinks) }})
+                    </span>
+                </div>
+                <div class="pc-card-body">
+                    <p style="font-size:0.78rem;color:var(--pc-muted);margin-bottom:0.875rem">Clique para abrir cada conversa no WhatsApp Web:</p>
+                    <div style="display:flex;flex-direction:column;gap:0.5rem;max-height:240px;overflow-y:auto">
+                        @foreach($generatedWaLinks as $waLink)
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;background:var(--pc-bg);border:1px solid var(--pc-border);border-radius:7px;padding:0.5rem 0.75rem">
+                            <span style="font-size:0.8125rem;font-weight:600;color:var(--pc-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ $waLink['name'] }}</span>
+                            <a href="{{ $waLink['url'] }}" target="_blank" class="pc-btn pc-btn-ghost pc-btn-sm" style="font-size:0.75rem;flex-shrink:0">Abrir</a>
+                        </div>
+                        @endforeach
+                    </div>
+                    <button wire:click="$set('generatedWaLinks',[])" class="pc-btn pc-btn-ghost pc-btn-sm" style="width:100%;justify-content:center;margin-top:0.75rem">Limpar lista</button>
+                </div>
+            </div>
             @endif
 
-            {{-- Seção de Quitação Anual --}}
-            <flux:card class="p-5">
-                <h3 class="text-sm font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300 flex items-center gap-2 mb-3">
-                    <flux:icon name="document-text" class="size-4 text-blue-600" /> Quitação Anual de Débitos
-                </h3>
-                <p class="text-xs text-neutral-500 mb-4">
-                    Envia por e-mail (usando <span class="font-semibold">ascaje@gmail.com</span>) a Declaração de Quitação Anual para todos os membros que estão com a situação de adimplência 100% regular.
-                </p>
-                <flux:button wire:click="sendAnnualDischarge" variant="primary" class="w-full" icon="envelope-open" wire:confirm="Confirma o envio do e-mail de quitação anual para todos os membros adimplentes?">
-                    Enviar Quitação Anual
-                </flux:button>
-            </flux:card>
+            {{-- Quitação anual --}}
+            <div class="pc-card">
+                <div class="pc-card-header">
+                    <span class="pc-card-title">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                        Quitação anual
+                    </span>
+                </div>
+                <div class="pc-card-body">
+                    <p style="font-size:0.8125rem;color:var(--pc-muted);line-height:1.55;margin-bottom:1rem">
+                        Envia por e-mail a Declaração de Quitação Anual para todos os membros <strong>100% adimplentes</strong> no extrato mais recente.
+                    </p>
+                    <button
+                        class="pc-btn pc-btn-primary"
+                        style="width:100%;justify-content:center"
+                        wire:click="sendAnnualDischarge"
+                        wire:confirm="Confirmar envio do e-mail de quitação anual para todos os adimplentes?"
+                    >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                        Enviar quitação anual
+                    </button>
+                </div>
+            </div>
+
         </div>
     </div>
+
+    <style>
+        @media(max-width:900px){
+            .msg-grid{ grid-template-columns:1fr !important; }
+        }
+    </style>
 </div>
