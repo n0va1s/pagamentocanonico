@@ -16,6 +16,10 @@ class Associacao extends Model
 
     protected $fillable = [
         'nom_associacao',
+        'tel_contato',
+        'des_chave_pix',
+        'val_taxa',
+        'val_anual',
     ];
 
     public function membros(): HasMany

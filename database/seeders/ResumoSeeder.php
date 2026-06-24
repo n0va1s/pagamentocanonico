@@ -16,14 +16,6 @@ class ResumoSeeder extends Seeder
             9 => 'Set', 10 => 'Out', 11 => 'Nov', 12 => 'Dez',
         ];
 
-        $pessoas = [
-            'João Paulo Silva',
-            'Maria Oliveira',
-            'Carlos Eduardo Santos',
-            'Ana Beatriz Lima',
-            'Devedor da Silva',
-        ];
-
         $ofxImports = Ofx::all();
 
         if ($ofxImports->isEmpty()) {
@@ -33,27 +25,39 @@ class ResumoSeeder extends Seeder
         }
 
         foreach ($ofxImports as $ofx) {
-            foreach ($pessoas as $pessoa) {
+            $membros = \App\Models\Membro::where('idt_associacao', $ofx->idt_associacao)->get();
+
+            foreach ($membros as $membro) {
+                // Determine if this member is adimplente or inadimplente
+                // 30% inadimplentes, 70% adimplentes.
+                // Devedor da Silva must always be inadimplente.
+                $isInadimplente = fake()->boolean(30);
+                if ($membro->eml_membro === 'devedor@email.com') {
+                    $isInadimplente = true;
+                }
+
+                $nomePessoa = $membro->nomeParaMatchingOfx();
+
                 // Gera resumo para os últimos 3 meses
                 for ($mes = 3; $mes >= 1; $mes--) {
                     $data = now()->subMonths($mes);
                     $numMes = (int) $data->format('n');
                     $numAno = (int) $data->format('Y');
                     
-                    if ($pessoa === 'Devedor da Silva') {
-                        $total = fake()->randomFloat(2, 100, 300);
+                    if ($isInadimplente) {
+                        $total = 0; // Value must be 0 for them to be Inadimplente in dashboard
                         $indPago = false;
                         $numTransacao = 0;
                     } else {
-                        $total = fake()->randomFloat(2, 0, 500);
-                        $indPago = $total > 0;
+                        $total = fake()->randomFloat(2, 50, 500);
+                        $indPago = true;
                         $numTransacao = fake()->numberBetween(1, 5);
                     }
 
                     Resumo::firstOrCreate(
                         [
                             'idt_ofx' => $ofx->idt_ofx,
-                            'nom_pessoa' => $pessoa,
+                            'nom_pessoa' => $nomePessoa,
                             'num_ano' => $numAno,
                             'num_mes' => $numMes,
                         ],

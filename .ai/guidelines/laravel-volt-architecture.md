@@ -1,6 +1,6 @@
 # Diretrizes de Arquitetura: Laravel Volt, Enums, Testes e Acessibilidade
 
-Esta diretriz define as regras obrigatórias para o desenvolvimento do projeto no ecossistema do OFX Tracker.
+Esta diretriz define as regras obrigatórias para o desenvolvimento do projeto no ecossistema do Pagamento - Canônico.
 
 ---
 

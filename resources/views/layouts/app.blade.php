@@ -12,7 +12,7 @@
                 <div class="w-7 h-7 rounded-md bg-blue-600 flex items-center justify-center text-white text-xs">
                     <i class="fa-solid fa-chart-line"></i>
                 </div>
-                <span class="font-bold text-zinc-800 dark:text-white text-sm">OFX Tracker</span>
+                <span class="font-bold text-zinc-800 dark:text-white text-sm">Pagamento - Canônico</span>
             </div>
 
             <flux:navbar class="-mb-px max-lg:hidden">
@@ -56,7 +56,7 @@
                     <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm">
                         <i class="fa-solid fa-chart-line"></i>
                     </div>
-                    <span class="font-bold text-zinc-800 dark:text-white text-sm">OFX Tracker</span>
+                    <span class="font-bold text-zinc-800 dark:text-white text-sm">Pagamento - Canônico<span>
                 </div>
                 <flux:sidebar.collapse class="in-data-flux-sidebar-on-desktop:not-in-data-flux-sidebar-collapsed-desktop:-mr-2" />
             </flux:sidebar.header>

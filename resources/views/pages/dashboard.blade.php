@@ -11,6 +11,7 @@ use Livewire\Attributes\Title;
 new #[Title('Dashboard')] class extends Component {
     // Admin/Director properties
     public ?int $selectedImportId = null;
+    public $selectedAssociacaoId = null;
 
     // Member properties
     public string $activeTab = 'pagamentos';
@@ -55,6 +56,11 @@ new #[Title('Dashboard')] class extends Component {
             } else {
                 $latest = Ofx::withoutGlobalScope('associacao')->latest()->first();
                 $this->selectedImportId = $latest ? $latest->idt_ofx : null;
+            }
+            
+            $associacaoId = request()->query('associacao');
+            if ($associacaoId) {
+                $this->selectedAssociacaoId = (int) $associacaoId;
             }
         }
     }
@@ -141,22 +147,6 @@ new #[Title('Dashboard')] class extends Component {
         $this->reset(['contactMessage']);
     }
 
-    public function requestDischarge(int $resumoId): void
-    {
-        $membro = auth()->user()->membro;
-        if (!$membro) { $this->dispatch('toast', message: 'Membro não cadastrado.', variant: 'danger'); return; }
-        $resumo = Resumo::findOrFail($resumoId);
-        if ($resumo->nom_pessoa !== $membro->nomeParaMatchingOfx()) { $this->dispatch('toast', message: 'Acesso negado.', variant: 'danger'); return; }
-        $botToken = config('services.telegram.bot_token', '');
-        $chatId = config('services.telegram.contact_chat_id') ?: env('TELEGRAM_CONTACT_CHAT_ID', '');
-        if (empty($chatId)) { $this->dispatch('toast', message: 'Chat ID administrativo não configurado.', variant: 'danger'); return; }
-        $texto = implode("\n", ["📄 <b>Solicitação de Quitação de Débito</b>", "👤 <b>Associado:</b> {$membro->nom_membro} ({$membro->eml_membro})", "📅 <b>Competência:</b> {$resumo->nom_mes}/{$resumo->num_ano}", "💰 <b>Valor:</b> R$ " . number_format($resumo->val_total, 2, ',', '.'), "✉️ Enviado via Minha Associação."]);
-        try {
-            $response = \Illuminate\Support\Facades\Http::post("https://api.telegram.org/bot{$botToken}/sendMessage", ['chat_id' => $chatId, 'text' => $texto, 'parse_mode' => 'HTML']);
-            if ($response->successful()) { $this->dispatch('toast', message: 'Solicitação enviada com sucesso!', variant: 'success'); }
-            else { $this->dispatch('toast', message: 'Erro ao enviar ao Telegram.', variant: 'danger'); }
-        } catch (\Exception $e) { $this->dispatch('toast', message: 'Erro: ' . $e->getMessage(), variant: 'danger'); }
-    }
 
     public function with(): array
     {
@@ -175,43 +165,95 @@ new #[Title('Dashboard')] class extends Component {
             return [
                 'isMembroDashboard' => true,
                 'membro' => $membro,
+                'todosResumos' => $todosResumos ?? collect(),
                 'resumosPendentes' => $resumosPendentes,
                 'resumosRegularizados' => $resumosRegularizados,
                 'associacoes' => \App\Models\Associacao::orderBy('nom_associacao')->get(),
             ];
         }
 
-        $isManager = $user->isAdmin() || $user->isDiretor();
-
-        $importacoes = $isManager 
-            ? Ofx::withoutGlobalScope('associacao')->latest()->get() 
-            : Ofx::latest()->get();
-
-        $importacaoSelecionada = null;
-        if ($this->selectedImportId) {
-            $importacaoSelecionada = $isManager
-                ? Ofx::withoutGlobalScope('associacao')->with(['resumos' => fn($q) => $q->withoutGlobalScope('associacao')])->find($this->selectedImportId)
-                : Ofx::with('resumos')->find($this->selectedImportId);
-        } else {
-            $importacaoSelecionada = $importacoes->first();
-        }
+        $isAdmin = $user->isAdmin();
+        $isManager = $isAdmin || $user->isDiretor();
+        $isAdminDashboard = $isAdmin && !$user->isDiretor();
 
         $dadosDashboard = [];
         $mesesDisponiveis = collect();
         $totalInadimplentes = 0;
         $totalAdimplentes = 0;
         $totalRecebido = 0;
+        $valorRecuperar = 0;
+        $totalMembrosAtivos = 0;
+        $totalAssociacoes = \App\Models\Associacao::count();
+        $allAssociacoes = \App\Models\Associacao::orderBy('nom_associacao')->get();
+
+        if ($isAdminDashboard) {
+            // Lógica do Dashboard Global para Admin
+            $membrosQuery = Membro::withoutGlobalScope('associacao')->with('associacao')->where('ind_aprovado', true);
+            if ($this->selectedAssociacaoId) {
+                $membrosQuery->where('idt_associacao', $this->selectedAssociacaoId);
+            }
+            $membros = $membrosQuery->get();
+            $totalMembrosAtivos = $membros->count();
+
+            $recebidoQuery = Resumo::withoutGlobalScope('associacao')->where('ind_pago', true);
+            if ($this->selectedAssociacaoId) {
+                $recebidoQuery->whereHas('ofx', function($q) {
+                    $q->withoutGlobalScope('associacao')->where('idt_associacao', $this->selectedAssociacaoId);
+                });
+            }
+            $totalRecebido = (float) $recebidoQuery->sum('val_total');
+
+            $inadimplentesQuery = Resumo::withoutGlobalScope('associacao')->where('ind_pago', false);
+            if ($this->selectedAssociacaoId) {
+                $inadimplentesQuery->whereHas('ofx', function($q) {
+                    $q->withoutGlobalScope('associacao')->where('idt_associacao', $this->selectedAssociacaoId);
+                });
+            }
+            $nomesInadimplentes = $inadimplentesQuery->pluck('nom_pessoa')->unique()->toArray();
+
+            foreach ($membros as $m) {
+                $nomeMatching = $m->nomeParaMatchingOfx();
+                if (in_array($nomeMatching, $nomesInadimplentes)) {
+                    $totalInadimplentes++;
+                    $valorRecuperar += $m->associacao?->val_taxa ?? 0;
+                } else {
+                    $totalAdimplentes++;
+                }
+            }
+
+            return [
+                'isMembroDashboard' => false,
+                'isAdminDashboard' => true,
+                'isDiretor' => false,
+                'importacoes' => collect(),
+                'importacaoSelecionada' => null,
+                'dadosDashboard' => [],
+                'mesesDisponiveis' => collect(),
+                'totalRecebido' => $totalRecebido,
+                'valorRecuperar' => $valorRecuperar,
+                'totalAdimplentes' => $totalAdimplentes,
+                'totalInadimplentes' => $totalInadimplentes,
+                'totalMembrosAtivos' => $totalMembrosAtivos,
+                'totalAssociacoes' => $totalAssociacoes,
+                'allAssociacoes' => $allAssociacoes,
+            ];
+        }
+
+        // Lógica do Dashboard Diretor (Por OFX)
+        $importacoes = Ofx::latest()->get();
+
+        $importacaoSelecionada = null;
+        if ($this->selectedImportId) {
+            $importacaoSelecionada = Ofx::with('resumos')->find($this->selectedImportId);
+        } else {
+            $importacaoSelecionada = $importacoes->first();
+        }
 
         if ($importacaoSelecionada) {
-            $resumos = $isManager
-                ? $importacaoSelecionada->resumos()->withoutGlobalScope('associacao')
-                    ->orderBy('num_ano')
-                    ->orderBy('num_mes')
-                    ->get()
-                : $importacaoSelecionada->resumos()
-                    ->orderBy('num_ano')
-                    ->orderBy('num_mes')
-                    ->get();
+            $resumos = $importacaoSelecionada->resumos()
+                ->orderBy('num_ano')
+                ->orderBy('num_mes')
+                ->get();
 
             $mesesDisponiveis = $resumos
                 ->unique(fn ($r) => $r->num_ano.'-'.str_pad($r->num_mes, 2, '0', STR_PAD_LEFT))
@@ -221,14 +263,10 @@ new #[Title('Dashboard')] class extends Component {
             $porPessoa = $resumos->groupBy('nom_pessoa');
 
             foreach ($porPessoa as $nomePessoa => $resumosPessoa) {
-                $membro = $isManager
-                    ? Membro::withoutGlobalScope('associacao')
-                        ->where('nom_ofx', $nomePessoa)
-                        ->orWhere('nom_membro', $nomePessoa)
-                        ->first()
-                    : Membro::where('nom_ofx', $nomePessoa)
-                        ->orWhere('nom_membro', $nomePessoa)
-                        ->first();
+                $membro = Membro::with('associacao')
+                    ->where('nom_ofx', $nomePessoa)
+                    ->orWhere('nom_membro', $nomePessoa)
+                    ->first();
 
                 $linha = [
                     'nome' => $nomePessoa,
@@ -261,26 +299,30 @@ new #[Title('Dashboard')] class extends Component {
                     $totalAdimplentes++;
                 } else {
                     $totalInadimplentes++;
+                    $valorRecuperar += $membro?->associacao?->val_taxa ?? 0;
                 }
 
                 $dadosDashboard[] = $linha;
             }
         }
 
-        $totalMembros = $isManager
-            ? Membro::withoutGlobalScope('associacao')->count()
-            : Membro::count();
+        $totalMembrosAtivos = Membro::where('ind_aprovado', true)->count();
 
         return [
             'isMembroDashboard' => false,
+            'isAdminDashboard' => false,
+            'isDiretor' => true,
             'importacoes' => $importacoes,
             'importacaoSelecionada' => $importacaoSelecionada,
             'dadosDashboard' => $dadosDashboard,
             'mesesDisponiveis' => $mesesDisponiveis,
             'totalRecebido' => $totalRecebido,
+            'valorRecuperar' => $valorRecuperar,
             'totalAdimplentes' => $totalAdimplentes,
             'totalInadimplentes' => $totalInadimplentes,
-            'totalMembros' => $totalMembros,
+            'totalMembrosAtivos' => $totalMembrosAtivos,
+            'totalAssociacoes' => $totalAssociacoes,
+            'allAssociacoes' => $allAssociacoes,
         ];
     }
 }; ?>
@@ -393,52 +435,27 @@ new #[Title('Dashboard')] class extends Component {
 
                             @if($activeTab === 'pagamentos')
 
-                                {{-- Pendentes --}}
-                                @if($resumosPendentes->count() > 0)
-                                <div class="pc-card" style="margin-bottom:1.25rem;border-color:#f5c6c2">
-                                    <div class="pc-card-header" style="background:var(--pc-red-lt)">
-                                        <span class="pc-card-title" style="color:var(--pc-red)">
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                                            Contribuições pendentes
-                                        </span>
-                                        <span class="pc-badge red">{{ $resumosPendentes->count() }}</span>
-                                    </div>
-                                    @foreach($resumosPendentes as $pendente)
-                                    <div style="display:flex;align-items:center;justify-content:space-between;padding:0.875rem 1.25rem;border-bottom:1px solid var(--pc-border)" wire:key="p{{ $pendente->idt_resumo }}">
-                                        <div>
-                                            <div style="font-weight:600;color:var(--pc-text);font-size:0.9375rem">{{ $pendente->nom_mes }}/{{ $pendente->num_ano }}</div>
-                                            <div style="font-size:0.78rem;color:var(--pc-subtle);margin-top:0.1rem">Valor em aberto: R$ {{ number_format($pendente->val_total, 2, ',', '.') }}</div>
-                                        </div>
-                                        <button
-                                            class="pc-btn pc-btn-ghost pc-btn-sm"
-                                            wire:click="requestDischarge({{ $pendente->idt_resumo }})"
-                                            wire:confirm="Deseja solicitar a quitação deste débito para a administração?"
-                                            style="font-size:0.78rem"
-                                        >
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                                            Solicitar quitação
-                                        </button>
-                                    </div>
-                                    @endforeach
-                                    <div style="padding:0.875rem 1.25rem;font-size:0.78rem;color:var(--pc-subtle)">
-                                        Clique em "Solicitar quitação" para avisar a administração e regularizar sua situação.
-                                    </div>
-                                </div>
-                                @endif
-
-                                {{-- Histórico --}}
+                                {{-- Contribuições --}}
                                 <div class="pc-card">
-                                    <div class="pc-card-header">
-                                        <span class="pc-card-title">
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--pc-green)"><polyline points="20 6 9 17 4 12"/></svg>
-                                            Histórico de contribuições pagas
-                                        </span>
-                                        <span style="font-size:0.78rem;color:var(--pc-subtle)">{{ $resumosRegularizados->count() }} registro(s)</span>
+                                    <div class="pc-card-header" style="flex-direction: column; align-items: flex-start; gap: 0.5rem;">
+                                        <div style="display:flex; width: 100%; justify-content: space-between; align-items: center;">
+                                            <span class="pc-card-title">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--pc-primary)"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                                                Contribuições
+                                            </span>
+                                            <span style="font-size:0.78rem;color:var(--pc-subtle)">{{ $todosResumos->count() }} registro(s)</span>
+                                        </div>
+                                        @if($resumosPendentes->count() > 0 && $membro->associacao?->chave_pix)
+                                            <div style="font-size:0.78rem;color:var(--pc-subtle); background: var(--pc-red-lt); padding: 0.75rem; border-radius: 6px; width: 100%;">
+                                                <strong style="color: var(--pc-red);">Atenção:</strong> Você possui contribuições pendentes. Realize o pagamento via PIX utilizando a chave: 
+                                                <strong style="user-select:all; color: var(--pc-text);">{{ $membro->associacao->chave_pix }}</strong>
+                                            </div>
+                                        @endif
                                     </div>
-                                    @if($resumosRegularizados->isEmpty())
+                                    @if($todosResumos->isEmpty())
                                         <div class="pc-empty" style="padding:2.5rem 1.5rem">
                                             <div class="pc-empty-title">Nenhum histórico encontrado</div>
-                                            <div class="pc-empty-desc">Contribuições pagas aparecerão aqui após a conciliação.</div>
+                                            <div class="pc-empty-desc">As contribuições aparecerão aqui após o processamento.</div>
                                         </div>
                                     @else
                                     <div style="overflow-x:auto">
@@ -446,18 +463,24 @@ new #[Title('Dashboard')] class extends Component {
                                             <thead>
                                                 <tr>
                                                     <th>Competência</th>
-                                                    <th>Valor pago</th>
+                                                    <th>Valor</th>
                                                     <th>Transações</th>
                                                     <th>Situação</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                @foreach($resumosRegularizados as $pago)
-                                                <tr wire:key="r{{ $pago->idt_resumo }}">
-                                                    <td class="cell-primary">{{ $pago->nom_mes }}/{{ $pago->num_ano }}</td>
-                                                    <td class="cell-mono" style="color:var(--pc-green);font-weight:600">R$ {{ number_format($pago->val_total, 2, ',', '.') }}</td>
-                                                    <td style="color:var(--pc-subtle)">{{ $pago->num_transacao }} depósito(s)</td>
-                                                    <td><span class="pc-badge green">Pago</span></td>
+                                                @foreach($todosResumos as $resumo)
+                                                <tr wire:key="r{{ $resumo->idt_resumo }}">
+                                                    <td class="cell-primary">{{ $resumo->nom_mes }}/{{ $resumo->num_ano }}</td>
+                                                    <td class="cell-mono" style="color: {{ $resumo->ind_pago ? 'var(--pc-green)' : 'var(--pc-red)' }}; font-weight:600">R$ {{ number_format($resumo->val_total, 2, ',', '.') }}</td>
+                                                    <td style="color:var(--pc-subtle)">{{ $resumo->num_transacao }} depósito(s)</td>
+                                                    <td>
+                                                        @if($resumo->ind_pago)
+                                                            <span class="pc-badge green">Pago</span>
+                                                        @else
+                                                            <span class="pc-badge red">Pendente</span>
+                                                        @endif
+                                                    </td>
                                                 </tr>
                                                 @endforeach
                                             </tbody>
@@ -629,159 +652,234 @@ new #[Title('Dashboard')] class extends Component {
                 @endif
             </div>
         @else
-            @if($importacaoSelecionada)
-            <!-- Seletor de Importação -->
-            <div class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-zinc-900">
-                <div class="flex items-center gap-3">
-                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
-                        <flux:icon name="building-library" class="size-5" />
-                    </div>
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Extrato Selecionado</p>
-                        <p class="text-sm font-bold text-neutral-800 dark:text-neutral-100">{{ $importacaoSelecionada->des_arquivo }}</p>
-                        <p class="text-xs text-neutral-500 dark:text-neutral-400">
-                            {{ $importacaoSelecionada->dat_inicio?->format('d/m/Y') }} – {{ $importacaoSelecionada->dat_fim?->format('d/m/Y') }} • {{ $importacaoSelecionada->qtd_transacao }} transações
-                        </p>
+            @if($isAdminDashboard || $importacaoSelecionada)
+                @if($isAdminDashboard)
+                <!-- Seletor de Associação (Admin) -->
+                <div class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-zinc-900">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
+                            <flux:icon name="building-office-2" class="size-5" />
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Associação Selecionada:</p>
+                            <flux:select wire:model.live="selectedAssociacaoId" class="w-64" placeholder="Todas as Associações (Visão Global)">
+                                <flux:select.option value="">Todas as Associações (Visão Global)</flux:select.option>
+                                @foreach($allAssociacoes as $assoc)
+                                    <flux:select.option value="{{ $assoc->idt_associacao }}">
+                                        {{ $assoc->nom_associacao }}
+                                    </flux:select.option>
+                                @endforeach
+                            </flux:select>
+                        </div>
                     </div>
                 </div>
-                @if($importacoes->count() > 0)
-                <div class="flex items-center gap-2">
-                    <flux:select wire:model.live="selectedImportId" class="w-64">
-                        @foreach($importacoes as $imp)
-                            <flux:select.option value="{{ $imp->idt_ofx }}">
-                                {{ $imp->des_arquivo }} ({{ $imp->dat_inicio?->format('m/Y') }})
-                            </flux:select.option>
-                        @endforeach
-                    </flux:select>
-                    <flux:button href="{{ route('upload') }}" icon="plus" size="sm" variant="primary">Novo</flux:button>
+                @else
+                <!-- Seletor de Importação (Diretor) -->
+                <div class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-zinc-900">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
+                            <flux:icon name="building-library" class="size-5" />
+                        </div>
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Extrato Selecionado</p>
+                            <p class="text-sm font-bold text-neutral-800 dark:text-neutral-100">{{ $importacaoSelecionada->des_arquivo }}</p>
+                            <p class="text-xs text-neutral-500 dark:text-neutral-400">
+                                {{ $importacaoSelecionada->dat_inicio?->format('d/m/Y') }} – {{ $importacaoSelecionada->dat_fim?->format('d/m/Y') }} • {{ $importacaoSelecionada->qtd_transacao }} transações
+                            </p>
+                        </div>
+                    </div>
+                    @if($importacoes->count() > 0)
+                    <div class="flex items-center gap-2">
+                        <flux:select wire:model.live="selectedImportId" class="w-64">
+                            @foreach($importacoes as $imp)
+                                <flux:select.option value="{{ $imp->idt_ofx }}">
+                                    {{ $imp->des_arquivo }} ({{ $imp->dat_inicio?->format('m/Y') }})
+                                </flux:select.option>
+                            @endforeach
+                        </flux:select>
+                        <flux:button href="{{ route('upload') }}" icon="plus" size="sm" variant="primary">Novo</flux:button>
+                    </div>
+                    @endif
                 </div>
                 @endif
-            </div>
 
-            <!-- Cards de Estatísticas -->
-            <div class="grid auto-rows-min gap-4 md:grid-cols-4">
-                <flux:card class="flex items-center justify-between p-5">
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Total Recebido</p>
-                        <p class="mt-1 text-2xl font-bold text-neutral-800 dark:text-neutral-100">R$ {{ number_format($totalRecebido,2,',','.') }}</p>
-                    </div>
-                    <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-green-100 text-green-600 dark:bg-green-900/30">
-                        <flux:icon name="banknotes" class="size-5" />
-                    </div>
-                </flux:card>
-                <flux:card class="flex items-center justify-between p-5">
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Adimplentes</p>
-                        <p class="mt-1 text-2xl font-bold text-green-600">{{ $totalAdimplentes }}</p>
-                    </div>
-                    <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-green-100 text-green-600 dark:bg-green-900/30">
-                        <flux:icon name="check-circle" class="size-5" />
-                    </div>
-                </flux:card>
-                <flux:card class="flex items-center justify-between p-5">
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Inadimplentes</p>
-                        <p class="mt-1 text-2xl font-bold text-red-600">{{ $totalInadimplentes }}</p>
-                    </div>
-                    <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-red-100 text-red-600 dark:bg-red-900/30">
-                        <flux:icon name="exclamation-triangle" class="size-5" />
-                    </div>
-                </flux:card>
-                <flux:card class="flex items-center justify-between p-5">
-                    <div>
-                        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Membros</p>
-                        <p class="mt-1 text-2xl font-bold text-blue-600">{{ $totalMembros }}</p>
-                    </div>
-                    <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
-                        <flux:icon name="users" class="size-5" />
-                    </div>
-                </flux:card>
-            </div>
+                <!-- Cards de Estatísticas -->
+                @if($isAdminDashboard)
+                <div class="grid auto-rows-min gap-4 md:grid-cols-3 lg:grid-cols-6">
+                    <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
+                        <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Associações Cadastradas</p>
+                        <div class="flex w-full items-center justify-between">
+                            <p class="text-xl font-bold text-blue-600">{{ $totalAssociacoes }}</p>
+                            <flux:icon name="building-office-2" class="size-5 text-blue-500 opacity-60" />
+                        </div>
+                    </flux:card>
+                    <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
+                        <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Membros Ativos</p>
+                        <div class="flex w-full items-center justify-between">
+                            <p class="text-xl font-bold text-blue-600">{{ $totalMembrosAtivos }}</p>
+                            <flux:icon name="users" class="size-5 text-blue-500 opacity-60" />
+                        </div>
+                    </flux:card>
+                    <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
+                        <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Membros Adimplentes</p>
+                        <div class="flex w-full items-center justify-between">
+                            <p class="text-xl font-bold text-green-600">{{ $totalAdimplentes }}</p>
+                            <flux:icon name="check-circle" class="size-5 text-green-500 opacity-60" />
+                        </div>
+                    </flux:card>
+                    <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
+                        <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Membros Inadimplentes</p>
+                        <div class="flex w-full items-center justify-between">
+                            <p class="text-xl font-bold text-red-600">{{ $totalInadimplentes }}</p>
+                            <flux:icon name="exclamation-triangle" class="size-5 text-red-500 opacity-60" />
+                        </div>
+                    </flux:card>
+                    <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
+                        <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Valor Transacionado</p>
+                        <div class="flex w-full items-center justify-between">
+                            <p class="text-lg font-bold text-neutral-800 dark:text-neutral-100">R$ {{ number_format($totalRecebido,2,',','.') }}</p>
+                            <flux:icon name="banknotes" class="size-5 text-neutral-500 opacity-60" />
+                        </div>
+                    </flux:card>
+                    <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
+                        <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Valor a Recuperar</p>
+                        <div class="flex w-full items-center justify-between">
+                            <p class="text-lg font-bold text-orange-600">R$ {{ number_format($valorRecuperar,2,',','.') }}</p>
+                            <flux:icon name="arrow-trending-down" class="size-5 text-orange-500 opacity-60" />
+                        </div>
+                    </flux:card>
+                </div>
+                @else
+                <div class="grid auto-rows-min gap-4 md:grid-cols-4">
+                    <flux:card class="flex items-center justify-between p-5">
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Total Recebido</p>
+                            <p class="mt-1 text-2xl font-bold text-neutral-800 dark:text-neutral-100">R$ {{ number_format($totalRecebido,2,',','.') }}</p>
+                        </div>
+                        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-green-100 text-green-600 dark:bg-green-900/30">
+                            <flux:icon name="banknotes" class="size-5" />
+                        </div>
+                    </flux:card>
+                    <flux:card class="flex items-center justify-between p-5">
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Adimplentes</p>
+                            <p class="mt-1 text-2xl font-bold text-green-600">{{ $totalAdimplentes }}</p>
+                        </div>
+                        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-green-100 text-green-600 dark:bg-green-900/30">
+                            <flux:icon name="check-circle" class="size-5" />
+                        </div>
+                    </flux:card>
+                    <flux:card class="flex items-center justify-between p-5">
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Inadimplentes</p>
+                            <p class="mt-1 text-2xl font-bold text-red-600">{{ $totalInadimplentes }}</p>
+                        </div>
+                        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-red-100 text-red-600 dark:bg-red-900/30">
+                            <flux:icon name="exclamation-triangle" class="size-5" />
+                        </div>
+                    </flux:card>
+                    <flux:card class="flex items-center justify-between p-5">
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Membros Ativos</p>
+                            <p class="mt-1 text-2xl font-bold text-blue-600">{{ $totalMembrosAtivos }}</p>
+                        </div>
+                        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
+                            <flux:icon name="users" class="size-5" />
+                        </div>
+                    </flux:card>
+                </div>
+                @endif
 
-            <!-- Seções Principais -->
-            <div class="space-y-6">
-                {{-- Tabela de Acompanhamento Mensal --}}
-                <flux:card class="p-0 overflow-hidden">
-                    <div class="flex items-center justify-between border-b border-neutral-100 px-5 py-4 dark:border-neutral-800 bg-neutral-50/50 dark:bg-zinc-800/20">
-                        <h3 class="text-sm font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300 flex items-center gap-2">
-                            <flux:icon name="table-cells" class="size-4 text-blue-600" /> Acompanhamento Mensal por Pagador
-                        </h3>
-                        <span class="text-xs text-neutral-500">{{ count($dadosDashboard) }} pagadores</span>
-                    </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-sm">
-                            <thead>
-                                <tr class="bg-neutral-50 text-xs uppercase tracking-wider text-neutral-600 dark:bg-zinc-800/50 dark:text-neutral-400">
-                                    <th class="px-4 py-3 text-left font-bold">Pagador (MEMO)</th>
-                                    @foreach($mesesDisponiveis as $month)
-                                        <th class="px-3 py-3 text-center font-bold">{{ $month->nom_mes }}<span class="block text-[10px] font-normal opacity-60">{{ $month->num_ano }}</span></th>
-                                    @endforeach
-                                    <th class="px-4 py-3 text-right font-bold">Total</th>
-                                    <th class="px-4 py-3 text-center font-bold">Situação</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-neutral-100 dark:divide-neutral-800">
-                                @forelse($dadosDashboard as $row)
-                                    <tr class="transition hover:bg-neutral-50/50 dark:hover:bg-zinc-800/30 {{ $row['situacao']==='Inadimplente' ? 'bg-red-50/10 dark:bg-red-950/5' : '' }}">
-                                        <td class="px-4 py-3">
-                                            <div class="flex items-center gap-2">
-                                                <div class="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-200 text-xs font-bold text-neutral-600 dark:bg-zinc-700 dark:text-neutral-300">
-                                                    {{ strtoupper(substr($row['nome'],0,1)) }}
+                <!-- Seções Principais -->
+                <div class="space-y-6">
+                    @if($isDiretor)
+                    {{-- Tabela de Acompanhamento Mensal --}}
+                    <flux:card class="p-0 overflow-hidden mt-6">
+                        <div class="flex items-center justify-between border-b border-neutral-100 px-5 py-4 dark:border-neutral-800 bg-neutral-50/50 dark:bg-zinc-800/20">
+                            <h3 class="text-sm font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300 flex items-center gap-2">
+                                <flux:icon name="table-cells" class="size-4 text-blue-600" /> Acompanhamento Mensal por Pagador
+                            </h3>
+                            <span class="text-xs text-neutral-500">{{ count($dadosDashboard) }} pagadores</span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="bg-neutral-50 text-xs uppercase tracking-wider text-neutral-600 dark:bg-zinc-800/50 dark:text-neutral-400">
+                                        <th class="px-4 py-3 text-left font-bold">Pagador (MEMO)</th>
+                                        @foreach($mesesDisponiveis as $month)
+                                            <th class="px-3 py-3 text-center font-bold">{{ $month->nom_mes }}<span class="block text-[10px] font-normal opacity-60">{{ $month->num_ano }}</span></th>
+                                        @endforeach
+                                        <th class="px-4 py-3 text-right font-bold">Total</th>
+                                        <th class="px-4 py-3 text-center font-bold">Situação</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-neutral-100 dark:divide-neutral-800">
+                                    @forelse($dadosDashboard as $row)
+                                        <tr class="transition hover:bg-neutral-50/50 dark:hover:bg-zinc-800/30 {{ $row['situacao']==='Inadimplente' ? 'bg-red-50/10 dark:bg-red-950/5' : '' }}">
+                                            <td class="px-4 py-3">
+                                                <div class="flex items-center gap-2">
+                                                    <div class="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-200 text-xs font-bold text-neutral-600 dark:bg-zinc-700 dark:text-neutral-300">
+                                                        {{ strtoupper(substr($row['nome'],0,1)) }}
+                                                    </div>
+                                                    <div>
+                                                        <p class="font-semibold text-neutral-800 dark:text-neutral-200">{{ $row['nome'] }}</p>
+                                                        @if($row['is_member'])
+                                                            <span class="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">Membro</span>
+                                                        @else
+                                                            <span class="inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-500 dark:bg-zinc-800 dark:text-neutral-400">Não cadastrado</span>
+                                                        @endif
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <p class="font-semibold text-neutral-800 dark:text-neutral-200">{{ $row['nome'] }}</p>
-                                                    @if($row['is_member'])
-                                                        <span class="inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">Membro</span>
+                                            </td>
+                                            @foreach($row['meses'] as $m)
+                                                <td class="px-3 py-3 text-center">
+                                                    @if($m['has_payment'])
+                                                        <span class="inline-block rounded bg-green-50 px-2 py-1 text-xs font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-400">R$ {{ number_format($m['value'],0,',','.') }}</span>
                                                     @else
-                                                        <span class="inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-500 dark:bg-zinc-800 dark:text-neutral-400">Não cadastrado</span>
+                                                        <span class="text-xs font-bold text-neutral-300 dark:text-neutral-600">—</span>
                                                     @endif
-                                                </div>
-                                            </div>
-                                        </td>
-                                        @foreach($row['meses'] as $m)
-                                            <td class="px-3 py-3 text-center">
-                                                @if($m['has_payment'])
-                                                    <span class="inline-block rounded bg-green-50 px-2 py-1 text-xs font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-400">R$ {{ number_format($m['value'],0,',','.') }}</span>
+                                                </td>
+                                            @endforeach
+                                            <td class="px-4 py-3 text-right font-bold text-neutral-700 dark:text-neutral-300">
+                                                R$ {{ number_format($row['total'],0,',','.') }}
+                                            </td>
+                                            <td class="px-4 py-3 text-center">
+                                                @if($row['situacao'] === 'Adimplente')
+                                                    <span class="inline-flex items-center gap-1 rounded bg-green-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                                        <flux:icon name="check-circle" class="size-3" /> Adimplente
+                                                    </span>
                                                 @else
-                                                    <span class="text-xs font-bold text-neutral-300 dark:text-neutral-600">—</span>
+                                                    <span class="inline-flex items-center gap-1 rounded bg-red-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                                                        <flux:icon name="exclamation-triangle" class="size-3" /> Inadimplente
+                                                    </span>
                                                 @endif
                                             </td>
-                                        @endforeach
-                                        <td class="px-4 py-3 text-right font-bold text-neutral-700 dark:text-neutral-300">R$ {{ number_format($row['total'],2,',','.') }}</td>
-                                        <td class="px-4 py-3 text-center">
-                                            @if($row['situacao'] === 'Adimplente')
-                                                <flux:badge color="green" size="sm" icon="check">Adimplente</flux:badge>
-                                            @else
-                                                <flux:badge color="red" size="sm" icon="x-mark">Inadimplente</flux:badge>
-                                            @endif
-                                        </td>
-                                    </tr>
-                                @empty
-                                    <tr>
-                                        <td colspan="{{ count($mesesDisponiveis)+3 }}" class="px-4 py-8 text-center text-neutral-400">
-                                            <flux:icon name="inbox" class="mx-auto mb-2 size-8 opacity-40" />
-                                            Nenhum dado de pagamento encontrado neste extrato.
-                                        </td>
-                                    </tr>
-                                @endforelse
-                            </tbody>
-                        </table>
-                    </div>
-                </flux:card>                
-            </div>
-
-            @else
-            <!-- Estado vazio -->
-            <div class="flex flex-1 flex-col items-center justify-center rounded-xl border border-neutral-200 bg-white p-12 text-center dark:border-neutral-700 dark:bg-zinc-900">
-                <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-900/20">
-                    <flux:icon name="arrow-up-tray" class="size-8 text-blue-600" />
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="100%" class="px-4 py-8 text-center text-neutral-500">
+                                                Nenhuma pessoa identificada neste extrato.
+                                            </td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </flux:card>                
+                    @endif
                 </div>
-                <h3 class="text-lg font-bold text-neutral-800 dark:text-neutral-100">Nenhum extrato OFX importado</h3>
-                <p class="mx-auto mb-6 mt-2 max-w-md text-sm text-neutral-500 dark:text-neutral-400">
-                    Importe seu primeiro extrato do Banco do Brasil para visualizar o acompanhamento mensal, identificar inadimplentes e disparar notificações.
-                </p>
-                <flux:button href="{{ route('upload') }}" variant="primary" icon="arrow-up-tray">Importar Extrato OFX</flux:button>
-            </div>
+            @else
+                <!-- Estado vazio para Diretor -->
+                <div class="flex flex-1 flex-col items-center justify-center rounded-xl border border-neutral-200 bg-white p-12 text-center dark:border-neutral-700 dark:bg-zinc-900">
+                    <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-900/20">
+                        <flux:icon name="arrow-up-tray" class="size-8 text-blue-600" />
+                    </div>
+                    <h3 class="text-lg font-bold text-neutral-800 dark:text-neutral-100">Nenhum extrato OFX importado</h3>
+                    <p class="mx-auto mb-6 mt-2 max-w-md text-sm text-neutral-500 dark:text-neutral-400">
+                        Importe seu primeiro extrato do Banco do Brasil para visualizar o acompanhamento mensal, identificar inadimplentes e disparar notificações.
+                    </p>
+                    <flux:button href="{{ route('upload') }}" variant="primary" icon="arrow-up-tray">Importar Extrato OFX</flux:button>
+                </div>
             @endif
         @endif
     </div>

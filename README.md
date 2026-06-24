@@ -1,4 +1,4 @@
-# OFX Tracker
+# Pagamento - Canônico
 
 Sistema de acompanhamento de pagamentos de membros via importação de extratos bancários OFX, com notificações automáticas por WhatsApp, Telegram e e-mail.
 

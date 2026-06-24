@@ -10,10 +10,12 @@ class OfxSeeder extends Seeder
 {
     public function run(): void
     {
+        $associacao = \App\Models\Associacao::firstOrCreate(['nom_associacao' => 'Associação Alfa']);
+
         // Cria 2 importações OFX com transações e resumos vinculados
         Ofx::factory()
             ->count(2)
-            ->create()
+            ->create(['idt_associacao' => $associacao->idt_associacao])
             ->each(function (Ofx $ofx) {
                 // 15 transações de crédito por importação
                 $transacoes = Transacao::factory()

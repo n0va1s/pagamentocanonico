@@ -55,8 +55,8 @@ export default defineConfig({
 
             // Manifest da PWA
             manifest: {
-                name: 'OFX Tracker',
-                short_name: 'OFX Tracker',
+                name: 'Pagamento-Canônico',
+                short_name: 'Pagamento-Canônico',
                 description: 'Acompanhamento de pagamentos e gestão de membros',
                 theme_color: '#2563eb',
                 background_color: '#ffffff',
