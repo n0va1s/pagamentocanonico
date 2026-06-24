@@ -2,8 +2,6 @@
 
 namespace App\Providers;
 
-use App\Services\Notifications\Messages\MensagemBuilder;
-use App\Services\Notifications\NotificationDispatcher;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -20,11 +18,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->singleton(MensagemBuilder::class);
-
-        $this->app->singleton(NotificationDispatcher::class, function ($app) {
-            return new NotificationDispatcher($app->make(MensagemBuilder::class));
-        });
+        //
     }
 
     /**

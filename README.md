@@ -71,6 +71,16 @@ php artisan key:generate
 
 Acesse em: **http://localhost**
 
+### Contas para Teste (Seeder)
+
+Após rodar os seeders, você pode utilizar as seguintes credenciais para acessar o painel (todas com a senha: `localhost@1`):
+
+- **Administrador**: `admin@email.com`
+- **Diretor**: `diretor@email.com`
+- **Membro**: `membro@email.com`
+- **Membro com Pendências**: `devedor@email.com`
+- **Pendente (Aguardando aprovação)**: `pendente@email.com`
+
 ### Serviços disponíveis no Sail
 
 | Serviço | URL |

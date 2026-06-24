@@ -13,11 +13,14 @@ test('registration screen can be rendered', function () {
 });
 
 test('new users can register', function () {
+    $assoc = \App\Models\Associacao::factory()->create();
+
     $response = $this->post(route('register.store'), [
         'name' => 'John Doe',
         'email' => 'test@example.com',
         'password' => 'password',
         'password_confirmation' => 'password',
+        'idt_associacao' => $assoc->idt_associacao,
     ]);
 
     $response->assertSessionHasNoErrors()
@@ -27,5 +30,12 @@ test('new users can register', function () {
     $this->assertDatabaseHas('users', [
         'email' => 'test@example.com',
         'role' => \App\Enums\Perfil::MEMBRO->value,
+    ]);
+
+    $this->assertDatabaseHas('membros', [
+        'eml_membro' => 'test@example.com',
+        'idt_associacao' => $assoc->idt_associacao,
+        'ind_aprovado' => false,
+        'usu_autorizador' => null,
     ]);
 });

@@ -10,6 +10,7 @@ return new class extends Migration
     {
         Schema::create('ofx', function (Blueprint $table) {
             $table->id('idt_ofx');
+            $table->foreignId('idt_associacao')->nullable()->constrained('associacoes', 'idt_associacao')->cascadeOnDelete();
             $table->string('des_arquivo');
             $table->string('cod_banco')->nullable(); // Código do banco
             $table->string('num_conta')->nullable(); // Número da conta

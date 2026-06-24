@@ -24,9 +24,6 @@ class StoreMembroRequest extends FormRequest
             'end_complemento' => ['nullable', 'string', 'max:150'],
             'tip_associado' => ['required', 'string', Rule::enum(Perfil::class)],
             'des_telegram_chat_id' => ['nullable', 'string', 'max:50'],
-            'ind_notificar_whatsapp' => ['boolean'],
-            'ind_notificar_email' => ['boolean'],
-            'ind_notificar_telegram' => ['boolean'],
         ];
     }
 

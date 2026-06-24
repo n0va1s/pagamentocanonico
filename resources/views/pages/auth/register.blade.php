@@ -30,6 +30,20 @@
                 placeholder="email@example.com"
             />
 
+            <!-- Associação -->
+            <flux:select
+                name="idt_associacao"
+                :label="__('Associação')"
+                placeholder="Selecione a associação..."
+                required
+            >
+                @foreach(\App\Models\Associacao::orderBy('nom_associacao')->get() as $assoc)
+                    <flux:select.option value="{{ $assoc->idt_associacao }}">
+                        {{ $assoc->nom_associacao }}
+                    </flux:select.option>
+                @endforeach
+            </flux:select>
+
             <!-- Password -->
             <flux:input
                 name="password"

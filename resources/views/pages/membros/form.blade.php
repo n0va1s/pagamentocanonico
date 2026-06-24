@@ -10,6 +10,7 @@ new class extends Component {
     public ?Membro $membro = null;
 
     // Dados pessoais
+    public ?int $idt_associacao          = null;
     public string $nom_membro            = '';
     public string $nom_ofx               = '';
     public string $eml_membro            = '';
@@ -23,17 +24,14 @@ new class extends Component {
     // Associação
     public string $tip_associado         = '';
 
-    // Notificações
-    public string $des_telegram_chat_id  = '';
-    public bool   $ind_notificar_whatsapp = true;
-    public bool   $ind_notificar_email    = true;
-    public bool   $ind_notificar_telegram = false;
+
 
     public function mount(?Membro $membro = null): void
     {
         $this->membro = $membro;
 
         if ($membro?->exists) {
+            $this->idt_associacao        = $membro->idt_associacao;
             $this->nom_membro            = $membro->nom_membro;
             $this->nom_ofx               = $membro->nom_ofx ?? '';
             $this->eml_membro            = $membro->eml_membro;
@@ -42,10 +40,9 @@ new class extends Component {
             $this->end_mumero            = $membro->end_mumero ?? '';
             $this->end_complemento       = $membro->end_complemento ?? '';
             $this->tip_associado         = $membro->tip_associado->value ?? '';
-            $this->des_telegram_chat_id  = $membro->des_telegram_chat_id ?? '';
-            $this->ind_notificar_whatsapp = $membro->ind_notificar_whatsapp;
-            $this->ind_notificar_email    = $membro->ind_notificar_email;
-            $this->ind_notificar_telegram = $membro->ind_notificar_telegram;
+
+        } else {
+            $this->idt_associacao        = auth()->user()->membro?->idt_associacao;
         }
     }
 
@@ -54,6 +51,7 @@ new class extends Component {
         $ignorarId = $this->membro?->idt_membro;
 
         return [
+            'idt_associacao'         => ['required', 'exists:associacoes,idt_associacao'],
             'nom_membro'             => ['required', 'string', 'max:255'],
             'nom_ofx'                => ['nullable', 'string', 'max:255'],
             'eml_membro'             => ['required', 'email', 'max:255', Rule::unique('membros', 'eml_membro')->ignore($ignorarId, 'idt_membro')],
@@ -62,16 +60,15 @@ new class extends Component {
             'end_mumero'             => ['nullable', 'string', 'max:20'],
             'end_complemento'        => ['nullable', 'string', 'max:150'],
             'tip_associado'          => ['required', Rule::enum(Perfil::class)],
-            'des_telegram_chat_id'   => ['nullable', 'string', 'max:50'],
-            'ind_notificar_whatsapp' => ['boolean'],
-            'ind_notificar_email'    => ['boolean'],
-            'ind_notificar_telegram' => ['boolean'],
+
         ];
     }
 
     protected function mensagens(): array
     {
         return [
+            'idt_associacao.required' => 'A associação é obrigatória.',
+            'idt_associacao.exists'   => 'A associação selecionada é inválida.',
             'nom_membro.required'    => 'O nome do membro é obrigatório.',
             'eml_membro.required'    => 'O e-mail é obrigatório.',
             'eml_membro.email'       => 'Informe um e-mail válido.',
@@ -83,12 +80,17 @@ new class extends Component {
 
     public function salvar(): void
     {
+        if (!auth()->user()->isAdmin()) {
+            $this->idt_associacao = auth()->user()->membro?->idt_associacao;
+        }
+
         $dados = $this->validate($this->regras(), $this->mensagens());
 
         if ($this->membro?->exists) {
             $this->membro->update($dados);
             $this->dispatch('toast', message: 'Membro atualizado com sucesso!', variant: 'success');
         } else {
+            $dados['ind_aprovado'] = true; // Auto approve manually created members
             Membro::create($dados);
             $this->dispatch('toast', message: 'Membro cadastrado com sucesso!', variant: 'success');
             $this->redirecionar();
@@ -104,6 +106,7 @@ new class extends Component {
     {
         return [
             'tiposAssociado' => Perfil::cases(),
+            'associacoes'    => \App\Models\Associacao::orderBy('nom_associacao')->get(),
             'editando'       => $this->membro?->exists ?? false,
         ];
     }
@@ -168,6 +171,21 @@ new class extends Component {
                     <flux:error name="tel_membro" />
                 </flux:field>
 
+                @if(auth()->user()->isAdmin())
+                <flux:field>
+                    <flux:label required for="idt_associacao">Associação</flux:label>
+                    <flux:select id="idt_associacao" wire:model="idt_associacao">
+                        <flux:select.option value="">Selecione...</flux:select.option>
+                        @foreach ($associacoes as $assoc)
+                            <flux:select.option value="{{ $assoc->idt_associacao }}">
+                                {{ $assoc->nom_associacao }}
+                            </flux:select.option>
+                        @endforeach
+                    </flux:select>
+                    <flux:error name="idt_associacao" />
+                </flux:field>
+                @endif
+
                 <flux:field>
                     <flux:label required for="tip_associado">Tipo de associação</flux:label>
                     <flux:select id="tip_associado" wire:model="tip_associado">
@@ -225,43 +243,7 @@ new class extends Component {
             </div>
         </flux:card>
 
-        {{-- Notificações --}}
-        <flux:card class="space-y-6">
-            <div>
-                <flux:heading size="sm">Notificações</flux:heading>
-                <flux:subheading>Canais por onde o membro receberá alertas de inadimplência.</flux:subheading>
-            </div>
 
-            <div class="space-y-4">
-
-                <flux:field variant="inline">
-                    <flux:checkbox id="ind_notificar_whatsapp" wire:model="ind_notificar_whatsapp" />
-                    <flux:label for="ind_notificar_whatsapp">Notificar por WhatsApp</flux:label>
-                </flux:field>
-
-                <flux:field variant="inline">
-                    <flux:checkbox id="ind_notificar_email" wire:model="ind_notificar_email" />
-                    <flux:label for="ind_notificar_email">Notificar por E-mail</flux:label>
-                </flux:field>
-
-                <flux:field variant="inline">
-                    <flux:checkbox id="ind_notificar_telegram" wire:model="ind_notificar_telegram" />
-                    <flux:label for="ind_notificar_telegram">Notificar por Telegram</flux:label>
-                </flux:field>
-
-                <flux:field x-show="$wire.ind_notificar_telegram" x-cloak>
-                    <flux:label for="des_telegram_chat_id">Chat ID do Telegram</flux:label>
-                    <flux:input
-                        id="des_telegram_chat_id"
-                        wire:model="des_telegram_chat_id"
-                        placeholder="Ex: 123456789"
-                    />
-                    <flux:description>Obtido ao iniciar conversa com o bot.</flux:description>
-                    <flux:error name="des_telegram_chat_id" />
-                </flux:field>
-
-            </div>
-        </flux:card>
 
         {{-- Ações --}}
         <div class="flex items-center justify-end gap-3">

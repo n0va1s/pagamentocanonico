@@ -1,19 +1,15 @@
 <?php
 
 use App\Enums\Perfil;
-use App\Enums\TipoNotificacao;
 use App\Models\Membro;
 use App\Models\Ofx;
 use App\Models\Resumo;
-use App\Models\Notificacao;
-use App\Services\Notifications\NotificationDispatcher;
-use App\Services\Notifications\Channels\TelegramChannel;
-use App\Services\Notifications\Channels\WhatsAppChannel;
-use App\Services\Notifications\Channels\EmailChannel;
+
 use Livewire\Volt\Component;
 use Livewire\WithPagination;
+use Livewire\Attributes\Title;
 
-new class extends Component {
+new #[Title('Membros')] class extends Component {
     use WithPagination;
 
     public string $busca        = '';
@@ -35,54 +31,6 @@ new class extends Component {
         $membro->delete();
 
         $this->dispatch('toast', message: 'Membro removido com sucesso!', variant: 'success');
-    }
-
-    public function alertMember(int $membroId, string $channel): void
-    {
-        $membro = Membro::findOrFail($membroId);
-        $dispatcher = app(NotificationDispatcher::class);
-
-        $selectedImport = Ofx::latest()->first();
-        if (!$selectedImport) {
-            $this->dispatch('toast', message: 'Nenhuma importação encontrada.', variant: 'danger');
-            return;
-        }
-
-        $atrasado = Resumo::where('idt_ofx', $selectedImport->idt_ofx)
-            ->where('nom_pessoa', $membro->nomeParaMatchingOfx())
-            ->where('ind_pago', false)
-            ->orderByDesc('num_ano')
-            ->orderByDesc('num_mes')
-            ->first();
-
-        $mesRef = $atrasado ? "{$atrasado->nom_mes}/{$atrasado->num_ano}" : 'mês atual';
-        $valorRef = $atrasado ? $atrasado->val_total : 0;
-
-        $mensagem = app(\App\Services\Notifications\Messages\MensagemBuilder::class)->construir(
-            TipoNotificacao::INADIMPLENTE,
-            $membro,
-            ['mes' => $mesRef, 'valor' => $valorRef]
-        );
-
-        if ($channel === 'whatsapp' || $channel === 'all') {
-            $wa = app(WhatsAppChannel::class);
-            $res = $wa->send($membro, $mensagem, TipoNotificacao::INADIMPLENTE);
-            if ($res['success'] && isset($res['redirect_url'])) {
-                $this->dispatch('open-wa-link', url: $res['redirect_url']);
-            }
-        }
-
-        if ($channel === 'email' || $channel === 'all') {
-            $email = app(EmailChannel::class);
-            $email->send($membro, $mensagem, TipoNotificacao::INADIMPLENTE);
-        }
-
-        if ($channel === 'telegram' || $channel === 'all') {
-            $telegram = app(TelegramChannel::class);
-            $telegram->send($membro, $mensagem, TipoNotificacao::INADIMPLENTE);
-        }
-
-        $this->dispatch('toast', message: 'Alerta disparado!', variant: 'success');
     }
 
     public function with(): array
@@ -108,7 +56,6 @@ new class extends Component {
                     ->where('ind_pago', false)
                     ->exists();
             }
-            $m->last_notification = Notificacao::where('idt_membro', $m->idt_membro)->latest()->first();
             return $m;
         });
 
@@ -119,14 +66,23 @@ new class extends Component {
     }
 }; ?>
 
-<div class="space-y-4" x-data="{}" x-on:open-wa-link.window="window.open($event.detail.url, '_blank')">
+<div class="space-y-6 p-6 max-w-7xl mx-auto" x-data="{}" x-on:open-wa-link.window="window.open($event.detail.url, '_blank')">
 
     {{-- Cabeçalho --}}
-    <div class="flex items-center justify-between">
-        <flux:heading size="xl">Membros</flux:heading>
-        <flux:button variant="primary" icon="plus" :href="route('membros.create')" wire:navigate>
-            Novo membro
-        </flux:button>
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-neutral-800 dark:text-neutral-100 flex items-center gap-2">
+                <flux:icon name="users" class="size-6 text-blue-600" /> Membros
+            </h1>
+            <p class="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
+                Gerencie os membros cadastrados na associação, visualize seus status de pagamento e execute ações.
+            </p>
+        </div>
+        <div class="flex items-center gap-2 self-start sm:self-auto">
+            <flux:button variant="primary" icon="plus" :href="route('membros.create')" wire:navigate>
+                Novo membro
+            </flux:button>
+        </div>
     </div>
 
     {{-- Filtros --}}
@@ -137,10 +93,11 @@ new class extends Component {
                  placeholder="Buscar por nome ou e-mail..."
                  icon="magnifying-glass"
                  clearable
+                 aria-label="Buscar membros"
             />
         </div>
         <div class="sm:w-52">
-            <flux:select wire:model.live="tip_associado">
+            <flux:select wire:model.live="tip_associado" aria-label="Tipo de associado">
                 <flux:select.option value="">Todos os tipos</flux:select.option>
                 @foreach ($tiposAssociado as $tipo)
                     <flux:select.option value="{{ $tipo->value }}">
@@ -152,14 +109,13 @@ new class extends Component {
     </flux:card>
 
     {{-- Tabela --}}
-    <flux:card>
+    <flux:card class="overflow-x-auto p-0">
         <flux:table>
             <flux:table.columns>
                 <flux:table.column>Membro</flux:table.column>
-                <flux:table.column>Contato</flux:table.column>
-                <flux:table.column>Tipo</flux:table.column>
+                <flux:table.column class="hidden md:table-cell">Contato</flux:table.column>
+                <flux:table.column class="hidden sm:table-cell">Tipo</flux:table.column>
                 <flux:table.column>Status OFX</flux:table.column>
-                <flux:table.column>Último Alerta</flux:table.column>
                 <flux:table.column class="text-right">Ações</flux:table.column>
             </flux:table.columns>
 
@@ -172,7 +128,7 @@ new class extends Component {
                             <p class="text-xs text-neutral-500 dark:text-neutral-400">{{ Str::limit($membro->end_logradouro, 35) }}</p>
                         </flux:table.cell>
 
-                        <flux:table.cell class="text-xs text-neutral-600 dark:text-neutral-400">
+                        <flux:table.cell class="text-xs text-neutral-600 dark:text-neutral-400 hidden md:table-cell">
                             <div class="space-y-0.5">
                                 @if($membro->eml_membro)<div><i class="fa-solid fa-envelope mr-1 w-4 text-neutral-400"></i>{{ $membro->eml_membro }}</div>@endif
                                 @if($membro->tel_membro)<div><i class="fa-brands fa-whatsapp mr-1 w-4 text-green-500"></i>{{ $membro->tel_membro }}</div>@endif
@@ -180,7 +136,7 @@ new class extends Component {
                             </div>
                         </flux:table.cell>
 
-                        <flux:table.cell>
+                        <flux:table.cell class="hidden sm:table-cell">
                             <flux:badge size="sm" class="uppercase">
                                 {{ $membro->tip_associado->label() }}
                             </flux:badge>
@@ -188,41 +144,27 @@ new class extends Component {
 
                         <flux:table.cell>
                             @if($membro->overdue)
-                                <span class="text-xs font-bold text-red-600"><i class="fa-solid fa-circle mr-1 text-[8px]"></i>Inadimplente</span>
-                            @else
-                                <span class="text-xs font-bold text-green-600"><i class="fa-solid fa-circle mr-1 text-[8px]"></i>Regular</span>
-                            @endif
-                        </flux:table.cell>
-
-                        <flux:table.cell class="text-xs text-neutral-500 dark:text-neutral-400">
-                            @if($membro->last_notification)
-                                {{ $membro->last_notification->created_at->diffForHumans() }}
-                                <span class="block {{ $membro->last_notification->ind_enviada ? 'text-green-600' : 'text-red-500' }}">
-                                    {{ $membro->last_notification->tip_canal }} • {{ $membro->last_notification->ind_enviada ? 'Enviado' : 'Falha' }}
+                                <span class="text-xs font-bold text-red-600 flex items-center gap-1.5">
+                                    <span class="inline-block h-2 w-2 rounded-full bg-red-600"></span>
+                                    Inadimplente
                                 </span>
                             @else
-                                <span class="text-neutral-400">Nunca alertado</span>
+                                <span class="text-xs font-bold text-green-600 flex items-center gap-1.5">
+                                    <span class="inline-block h-2 w-2 rounded-full bg-green-600"></span>
+                                    Regular
+                                </span>
                             @endif
                         </flux:table.cell>
 
                         <flux:table.cell class="text-right">
                             <div class="flex justify-end gap-1">
-                                @if($membro->tel_membro)
-                                    <flux:button wire:click="alertMember({{ $membro->idt_membro }}, 'whatsapp')" size="xs" class="!bg-green-100 !text-green-700 hover:!bg-green-200 dark:!bg-green-900/30 dark:!text-green-400" title="Alerta WhatsApp Web + Email Espelho">
-                                        <i class="fa-brands fa-whatsapp"></i>
-                                    </flux:button>
-                                @endif
-                                @if($membro->eml_membro)
-                                    <flux:button wire:click="alertMember({{ $membro->idt_membro }}, 'email')" size="xs" class="!bg-blue-100 !text-blue-700 hover:!bg-blue-200 dark:!bg-blue-900/30 dark:!text-blue-400" title="Alerta E-mail">
-                                        <i class="fa-solid fa-envelope"></i>
-                                    </flux:button>
-                                @endif
                                 <flux:button
                                     size="sm"
                                     variant="ghost"
                                     icon="pencil"
                                     :href="route('membros.edit', $membro)"
                                     wire:navigate
+                                    aria-label="Editar membro"
                                 />
                                 <flux:button
                                     size="sm"
@@ -230,6 +172,7 @@ new class extends Component {
                                     icon="trash"
                                     wire:click="excluir({{ $membro->idt_membro }})"
                                     wire:confirm="Tem certeza que deseja remover {{ $membro->nom_membro }}?"
+                                    aria-label="Remover membro"
                                 />
                             </div>
                         </flux:table.cell>
@@ -237,7 +180,7 @@ new class extends Component {
                     </flux:table.row>
                 @empty
                     <flux:table.row>
-                        <flux:table.cell colspan="6" class="py-12 text-center text-zinc-400">
+                        <flux:table.cell colspan="5" class="py-12 text-center text-zinc-400">
                             Nenhum membro encontrado.
                         </flux:table.cell>
                     </flux:table.row>

@@ -11,14 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('contatos', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('idt_associacao')->constrained('associacoes', 'idt_associacao')->cascadeOnDelete();
-            $table->string('nome');
-            $table->string('email');
-            $table->text('mensagem');
-            $table->softDeletes();
+        Schema::create('associacoes', function (Blueprint $table) {
+            $table->id('idt_associacao');
+            $table->string('nom_associacao');
             $table->timestamps();
+            $table->softDeletes();
         });
     }
 
@@ -27,6 +24,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('contatos');
+        Schema::dropIfExists('associacoes');
     }
 };

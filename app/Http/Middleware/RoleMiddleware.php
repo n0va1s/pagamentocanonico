@@ -24,7 +24,7 @@ class RoleMiddleware
         if (! $request->user()->hasRole($roles)) {
             // Se o usuário for um membro comum tentando acessar o painel de gestão, redireciona amigavelmente
             if ($request->user()->isMembro()) {
-                return redirect()->route('minha-associacao');
+                return redirect()->route('dashboard');
             }
 
             abort(403, 'Acesso não autorizado.');

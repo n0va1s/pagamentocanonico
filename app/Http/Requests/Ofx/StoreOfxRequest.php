@@ -13,9 +13,15 @@ class StoreOfxRequest extends FormRequest
 
     public function rules(): array
     {
-        return [
+        $rules = [
             'ofx_file' => ['required', 'file', 'mimes:ofx,txt,xml', 'max:5120'], // 5 MB
         ];
+
+        if (auth()->user()?->isAdmin()) {
+            $rules['idt_associacao'] = ['required', 'exists:associacoes,idt_associacao'];
+        }
+
+        return $rules;
     }
 
     public function messages(): array
@@ -25,6 +31,8 @@ class StoreOfxRequest extends FormRequest
             'ofx_file.file' => 'O campo deve ser um arquivo válido.',
             'ofx_file.mimes' => 'O arquivo deve estar no formato OFX, TXT ou XML.',
             'ofx_file.max' => 'O arquivo não pode ultrapassar 5 MB.',
+            'idt_associacao.required' => 'A associação é obrigatória.',
+            'idt_associacao.exists' => 'A associação selecionada é inválida.',
         ];
     }
 }

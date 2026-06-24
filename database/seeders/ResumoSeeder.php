@@ -21,6 +21,7 @@ class ResumoSeeder extends Seeder
             'Maria Oliveira',
             'Carlos Eduardo Santos',
             'Ana Beatriz Lima',
+            'Devedor da Silva',
         ];
 
         $ofxImports = Ofx::all();
@@ -38,7 +39,16 @@ class ResumoSeeder extends Seeder
                     $data = now()->subMonths($mes);
                     $numMes = (int) $data->format('n');
                     $numAno = (int) $data->format('Y');
-                    $total = fake()->randomFloat(2, 0, 500);
+                    
+                    if ($pessoa === 'Devedor da Silva') {
+                        $total = fake()->randomFloat(2, 100, 300);
+                        $indPago = false;
+                        $numTransacao = 0;
+                    } else {
+                        $total = fake()->randomFloat(2, 0, 500);
+                        $indPago = $total > 0;
+                        $numTransacao = fake()->numberBetween(1, 5);
+                    }
 
                     Resumo::firstOrCreate(
                         [
@@ -50,8 +60,8 @@ class ResumoSeeder extends Seeder
                         [
                             'nom_mes' => $nomesMeses[$numMes],
                             'val_total' => $total,
-                            'num_transacao' => fake()->numberBetween(1, 5),
-                            'ind_pago' => $total > 0,
+                            'num_transacao' => $numTransacao,
+                            'ind_pago' => $indPago,
                         ]
                     );
                 }

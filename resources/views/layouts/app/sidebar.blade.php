@@ -21,6 +21,9 @@
                         <flux:sidebar.item icon="layout-grid" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
                             {{ __('Dashboard') }}
                         </flux:sidebar.item>
+                        <flux:sidebar.item icon="check-badge" :href="route('aprovacoes')" :current="request()->routeIs('aprovacoes')" wire:navigate>
+                            {{ __('Aprovações') }}
+                        </flux:sidebar.item>
                     </flux:sidebar.group>
 
                     <flux:sidebar.group :heading="__('Financeiro')" class="grid">
@@ -33,18 +36,20 @@
                     </flux:sidebar.group>
                 @endcan
 
+                @can('admin')
+                    <flux:sidebar.group :heading="__('Associações')" class="grid">
+                        <flux:sidebar.item icon="building-office-2" :href="route('associacoes.index')" :current="request()->routeIs('associacoes.*')" wire:navigate>
+                            {{ __('Associações') }}
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+                @endcan
+
                 <flux:sidebar.group :heading="__('Cadastros')" class="grid">
                     @can('diretor')
-                        <flux:sidebar.item icon="users" :href="route('members.index')" :current="request()->routeIs('members.*')" wire:navigate>
+                        <flux:sidebar.item icon="users" :href="route('membros.index')" :current="request()->routeIs('membros.*')" wire:navigate>
                             {{ __('Membros') }}
                         </flux:sidebar.item>
                     @endcan
-                    <flux:sidebar.item icon="envelope" :href="route('contato')" :current="request()->routeIs('contato')" wire:navigate>
-                        {{ __('Contato') }}
-                    </flux:sidebar.item>
-                    <flux:sidebar.item icon="user" :href="route('minha-associacao')" :current="request()->routeIs('minha-associacao')" wire:navigate>
-                        {{ __('Minha Associação') }}
-                    </flux:sidebar.item>
                 </flux:sidebar.group>
             </flux:sidebar.nav>
 
@@ -52,9 +57,8 @@
 
             @can('diretor')
                 <flux:sidebar.nav>
-                    <flux:sidebar.item icon="bell" :href="route('mensagens')" :current="request()->routeIs('mensagens')" wire:navigate>
+                    <flux:sidebar.item icon="bell" :href="route('mensagens.index')" :current="request()->routeIs('mensagens.*')" wire:navigate>
                         {{ __('Mensagens') }}
-                        <flux:badge color="red" size="sm" class="ml-auto">{{ App\Models\Notificacao::where('ind_enviada', false)->count() }}</flux:badge>
                     </flux:sidebar.item>
                 </flux:sidebar.nav>
             @endcan

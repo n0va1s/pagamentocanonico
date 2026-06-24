@@ -19,11 +19,12 @@ class OfxParserService
     /**
      * Processa o arquivo OFX e persiste os dados no banco.
      */
-    public function processar(string $caminhoArquivo, string $nomeOriginal): Ofx
+    public function processar(string $caminhoArquivo, string $nomeOriginal, ?int $idtAssociacao = null): Ofx
     {
         $conteudo = $this->lerArquivo($caminhoArquivo);
 
         $ofx = Ofx::create([
+            'idt_associacao' => $idtAssociacao,
             'des_arquivo' => $nomeOriginal,
             'cod_banco' => $this->extrairTag($conteudo, 'BANKID'),
             'num_conta' => $this->extrairTag($conteudo, 'ACCTID'),

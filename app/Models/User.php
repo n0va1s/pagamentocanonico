@@ -14,7 +14,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
 
 use App\Enums\Perfil;
 
-#[Fillable(['name', 'email', 'password', 'role'])]
+#[Fillable(['name', 'email', 'password', 'role', 'idt_membro'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -93,5 +93,77 @@ class User extends Authenticatable
             ->take(2)
             ->map(fn ($word) => Str::substr($word, 0, 1))
             ->implode('');
+    }
+
+    public function membro()
+    {
+        return $this->belongsTo(Membro::class, 'idt_membro', 'idt_membro');
+    }
+
+    protected ?int $membroAssociacaoIdCached = null;
+    protected static bool $resolvingScope = false;
+
+    public function getMembroAssociacaoId(): ?int
+    {
+        if (!$this->idt_membro) {
+            return null;
+        }
+        if ($this->membroAssociacaoIdCached === null) {
+            $this->membroAssociacaoIdCached = Membro::withoutGlobalScopes()->where('idt_membro', $this->idt_membro)->value('idt_associacao') ?? -1;
+        }
+        return $this->membroAssociacaoIdCached === -1 ? null : $this->membroAssociacaoIdCached;
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (User $user) {
+            if (!$user->idt_membro && $user->role !== Perfil::ADMIN && $user->role !== 'admin') {
+                $existingMembro = Membro::withoutGlobalScopes()->where('eml_membro', $user->email)->first();
+                if ($existingMembro) {
+                    $user->idt_membro = $existingMembro->idt_membro;
+                    $user->role = $existingMembro->tip_associado;
+                } else {
+                    $membro = Membro::create([
+                        'nom_membro' => $user->name,
+                        'eml_membro' => $user->email,
+                        'tip_associado' => $user->role ?? Perfil::MEMBRO,
+                        'idt_associacao' => request('idt_associacao') ?? Associacao::first()?->idt_associacao ?? Associacao::factory()->create()->idt_associacao,
+                        'ind_aprovado' => false,
+                        'usu_autorizador' => null,
+                    ]);
+                    $user->idt_membro = $membro->idt_membro;
+                }
+            }
+        });
+
+        static::updated(function (User $user) {
+            if ($user->wasChanged('role') && $user->idt_membro) {
+                $membro = Membro::withoutGlobalScopes()->find($user->idt_membro);
+                if ($membro && $membro->tip_associado !== $user->role) {
+                    $membro->update(['tip_associado' => $user->role]);
+                }
+            }
+        });
+
+        static::addGlobalScope('associacao', function (\Illuminate\Database\Eloquent\Builder $builder) {
+            if (static::$resolvingScope) {
+                return;
+            }
+
+            try {
+                static::$resolvingScope = true;
+
+                if (auth()->check() && !auth()->user()->isAdmin()) {
+                    $associacaoId = auth()->user()->getMembroAssociacaoId();
+                    $builder->whereIn('idt_membro', function ($query) use ($associacaoId) {
+                        $query->select('idt_membro')
+                              ->from('membros')
+                              ->where('idt_associacao', $associacaoId);
+                    });
+                }
+            } finally {
+                static::$resolvingScope = false;
+            }
+        });
     }
 }

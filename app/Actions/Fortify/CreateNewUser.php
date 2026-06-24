@@ -22,12 +22,17 @@ class CreateNewUser implements CreatesNewUsers
         Validator::make($input, [
             ...$this->profileRules(),
             'password' => $this->passwordRules(),
+            'idt_associacao' => ['required', 'exists:associacoes,idt_associacao'],
+        ], [
+            'idt_associacao.required' => 'A associação é obrigatória.',
+            'idt_associacao.exists' => 'A associação selecionada é inválida.',
         ])->validate();
 
         return User::create([
             'name' => $input['name'],
             'email' => $input['email'],
             'password' => $input['password'],
+            'role' => \App\Enums\Perfil::MEMBRO,
         ]);
     }
 }

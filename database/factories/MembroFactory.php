@@ -13,9 +13,12 @@ class MembroFactory extends Factory
     public function definition(): array
     {
         return [
+            'idt_associacao' => \App\Models\Associacao::factory(),
             'nom_membro' => fake('pt_BR')->name(),
+            'ind_aprovado' => true,
             'eml_membro' => fake()->unique()->safeEmail(),
             'tel_membro' => fake('pt_BR')->optional()->phoneNumber(),
+            'dat_nascimento' => fake()->date(),
             'end_logradouro' => fake('pt_BR')->optional()->streetName(),
             'end_mumero' => fake()->optional()->buildingNumber(),
             'end_complemento' => fake('pt_BR')->optional()->secondaryAddress(),

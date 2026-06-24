@@ -18,6 +18,7 @@ class Ofx extends Model
     public $timestamps = true;
 
     protected $fillable = [
+        'idt_associacao',
         'des_arquivo',
         'cod_banco',
         'num_conta',
@@ -26,6 +27,20 @@ class Ofx extends Model
         'qtd_transacao',
         'val_total',
     ];
+
+    public function associacao()
+    {
+        return $this->belongsTo(Associacao::class, 'idt_associacao', 'idt_associacao');
+    }
+
+    protected static function booted(): void
+    {
+        static::addGlobalScope('associacao', function (\Illuminate\Database\Eloquent\Builder $builder) {
+            if (auth()->check() && !auth()->user()->isAdmin()) {
+                $builder->where('idt_associacao', auth()->user()->getMembroAssociacaoId());
+            }
+        });
+    }
 
     protected $casts = [
         'dat_inicio' => 'date',

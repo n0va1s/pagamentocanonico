@@ -24,8 +24,12 @@ class OfxUploadController extends Controller
         $caminho = $arquivo->store('temp/ofx', 'local');
         $caminhoFull = Storage::disk('local')->path($caminho);
 
+        $idtAssociacao = $request->user()->isAdmin()
+            ? $request->input('idt_associacao')
+            : $request->user()->membro?->idt_associacao;
+
         try {
-            $ofx = $this->parser->processar($caminhoFull, $arquivo->getClientOriginalName());
+            $ofx = $this->parser->processar($caminhoFull, $arquivo->getClientOriginalName(), $idtAssociacao);
 
             Storage::disk('local')->delete($caminho);
 

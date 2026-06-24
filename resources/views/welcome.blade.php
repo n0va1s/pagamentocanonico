@@ -448,9 +448,9 @@
 
                     @auth
                         @can('diretor')
-                            <a href="{{ route('dashboard') }}" class="nav-cta" wire:navigate>Painel Admin</a>
+                            <a href="{{ route('dashboard') }}" class="nav-cta" wire:navigate>Painel de Controle</a>
                         @else
-                            <a href="{{ route('minha-associacao') }}" class="nav-cta" wire:navigate>Minha Associação</a>
+                            <a href="{{ route('dashboard') }}" class="nav-cta" wire:navigate>Minha Associação</a>
                         @endcan
                     @else
                         <a href="{{ route('login') }}" class="nav-ghost" wire:navigate>Entrar</a>
@@ -484,7 +484,7 @@
                             @can('diretor')
                                 <a href="{{ route('dashboard') }}" class="btn-primary" wire:navigate>Acessar o painel</a>
                             @else
-                                <a href="{{ route('minha-associacao') }}" class="btn-primary" wire:navigate>Ver minha situação</a>
+                                <a href="{{ route('dashboard') }}" class="btn-primary" wire:navigate>Ver minha situação</a>
                             @endcan
                         @else
                             <a href="{{ route('register') }}" class="btn-primary" wire:navigate>Criar minha conta</a>

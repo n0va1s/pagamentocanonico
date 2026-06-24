@@ -37,4 +37,18 @@ class Transacao extends Model
     {
         return $this->belongsTo(Ofx::class, 'idt_ofx');
     }
+
+    protected static function booted(): void
+    {
+        static::addGlobalScope('associacao', function (\Illuminate\Database\Eloquent\Builder $builder) {
+            if (auth()->check() && !auth()->user()->isAdmin()) {
+                $associacaoId = auth()->user()->getMembroAssociacaoId();
+                $builder->whereIn('idt_ofx', function ($query) use ($associacaoId) {
+                    $query->select('idt_ofx')
+                          ->from('ofx')
+                          ->where('idt_associacao', $associacaoId);
+                });
+            }
+        });
+    }
 }
