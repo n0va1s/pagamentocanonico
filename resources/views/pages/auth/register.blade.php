@@ -19,6 +19,58 @@
                 :placeholder="__('Full name')"
             />
 
+            <!-- Apelido -->
+            <flux:input
+                name="nom_apelido"
+                label="Apelido"
+                :value="old('nom_apelido')"
+                type="text"
+                placeholder="Seu apelido"
+            />
+
+            <!-- Celular -->
+            <flux:input
+                name="tel_membro"
+                label="Celular"
+                :value="old('tel_membro')"
+                type="text"
+                mask="(99) 99999-9999"
+                placeholder="(61) 98154-6988"
+            />
+
+            <!-- Logradouro -->
+            <flux:input
+                name="end_logradouro"
+                label="Endereço / Logradouro"
+                :value="old('end_logradouro')"
+                type="text"
+                placeholder="Rua, Avenida, etc."
+            />
+
+            <div class="flex gap-4">
+                <!-- Número -->
+                <div class="flex-1">
+                    <flux:input
+                        name="end_numero"
+                        label="Número"
+                        :value="old('end_numero')"
+                        type="text"
+                        placeholder="Nº"
+                    />
+                </div>
+
+                <!-- Complemento -->
+                <div class="flex-1">
+                    <flux:input
+                        name="end_complemento"
+                        label="Complemento"
+                        :value="old('end_complemento')"
+                        type="text"
+                        placeholder="Apto, Bloco, etc."
+                    />
+                </div>
+            </div>
+
             <!-- Email Address -->
             <flux:input
                 name="email"

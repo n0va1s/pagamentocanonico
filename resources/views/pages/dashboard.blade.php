@@ -16,10 +16,10 @@ new #[Title('Dashboard')] class extends Component {
     // Member properties
     public string $activeTab = 'pagamentos';
     public string $nom_membro = '';
-    public ?string $nom_ofx = null;
+    public ?string $nom_apelido = null;
     public ?string $tel_membro = null;
     public ?string $end_logradouro = null;
-    public ?string $end_mumero = null;
+    public ?string $end_numero = null;
     public ?string $end_complemento = null;
     public ?string $des_telegram_chat_id = null;
 
@@ -35,10 +35,10 @@ new #[Title('Dashboard')] class extends Component {
             $membro = $user->membro;
             if ($membro) {
                 $this->nom_membro = $membro->nom_membro;
-                $this->nom_ofx = $membro->nom_ofx;
+                $this->nom_apelido = $membro->nom_apelido;
                 $this->tel_membro = $membro->tel_membro;
                 $this->end_logradouro = $membro->end_logradouro;
-                $this->end_mumero = $membro->end_mumero;
+                $this->end_numero = $membro->end_numero;
                 $this->end_complemento = $membro->end_complemento;
                 $this->des_telegram_chat_id = $membro->des_telegram_chat_id;
 
@@ -81,19 +81,19 @@ new #[Title('Dashboard')] class extends Component {
         }
         $this->validate([
             'nom_membro' => 'required|string|max:255',
-            'nom_ofx' => 'nullable|string|max:255',
+            'nom_apelido' => 'nullable|string|max:100',
             'tel_membro' => 'nullable|string|max:20',
             'end_logradouro' => 'nullable|string|max:150',
-            'end_mumero' => 'nullable|string|max:20',
+            'end_numero' => 'nullable|string|max:20',
             'end_complemento' => 'nullable|string|max:150',
             'des_telegram_chat_id' => 'nullable|string|max:50',
         ]);
         $membro->update([
             'nom_membro' => $this->nom_membro,
-            'nom_ofx' => $this->nom_ofx ?: null,
+            'nom_apelido' => $this->nom_apelido ?: null,
             'tel_membro' => $this->tel_membro,
             'end_logradouro' => $this->end_logradouro,
-            'end_mumero' => $this->end_mumero,
+            'end_numero' => $this->end_numero,
             'end_complemento' => $this->end_complemento,
             'des_telegram_chat_id' => $this->des_telegram_chat_id,
         ]);
@@ -512,9 +512,9 @@ new #[Title('Dashboard')] class extends Component {
                                             </div>
                                             <div style="grid-column:1/-1">
                                                 <flux:field>
-                                                    <flux:label>Nome no extrato bancário <span style="font-weight:400;color:var(--pc-subtle)">(se diferente do acima)</span></flux:label>
-                                                    <flux:input wire:model="nom_ofx" placeholder="Como aparece no OFX..." />
-                                                    <flux:error name="nom_ofx" />
+                                                    <flux:label>Apelido</flux:label>
+                                                    <flux:input wire:model="nom_apelido" placeholder="Seu apelido..." />
+                                                    <flux:error name="nom_apelido" />
                                                 </flux:field>
                                             </div>
                                             <flux:field>
@@ -536,8 +536,8 @@ new #[Title('Dashboard')] class extends Component {
                                             </div>
                                             <flux:field>
                                                 <flux:label>Número</flux:label>
-                                                <flux:input wire:model="end_mumero" />
-                                                <flux:error name="end_mumero" />
+                                                <flux:input wire:model="end_numero" />
+                                                <flux:error name="end_numero" />
                                             </flux:field>
                                             <flux:field>
                                                 <flux:label>Bairro / Complemento</flux:label>

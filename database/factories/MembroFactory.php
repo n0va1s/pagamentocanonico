@@ -20,7 +20,7 @@ class MembroFactory extends Factory
             'tel_membro' => fake('pt_BR')->optional()->phoneNumber(),
             'dat_nascimento' => fake()->date(),
             'end_logradouro' => fake('pt_BR')->optional()->streetName(),
-            'end_mumero' => fake()->optional()->buildingNumber(),
+            'end_numero' => fake()->optional()->buildingNumber(),
             'end_complemento' => fake('pt_BR')->optional()->secondaryAddress(),
             'tip_associado' => fake()->randomElement(Perfil::cases())->value,
             'des_telegram_chat_id' => null,

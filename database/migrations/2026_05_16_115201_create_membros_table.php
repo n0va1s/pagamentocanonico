@@ -17,8 +17,9 @@ return new class extends Migration
             $table->string('tel_membro', 20)->nullable();
             $table->date('dat_nascimento')->nullable();
             $table->string('end_logradouro', 150)->nullable();       // Bairro/Complemento
-            $table->string('end_mumero', 20)->nullable();         // Número/Apartamento
+            $table->string('end_numero', 20)->nullable();            // Número/Apartamento
             $table->string('end_complemento', 150)->nullable();      // Rua/Avenida
+            $table->string('nom_apelido', 100)->nullable();          // Apelido
             $table->string('tip_associado', 50)->default('membro'); // Tipo de associação
             $table->string('usu_autorizador')->nullable();
             $table->boolean('ind_aprovado')->default(false);

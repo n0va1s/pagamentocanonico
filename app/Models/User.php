@@ -128,6 +128,11 @@ class User extends Authenticatable
                         'eml_membro' => $user->email,
                         'tip_associado' => $user->role ?? Perfil::MEMBRO,
                         'idt_associacao' => request('idt_associacao') ?? Associacao::first()?->idt_associacao ?? Associacao::factory()->create()->idt_associacao,
+                        'end_logradouro' => request('end_logradouro'),
+                        'end_numero' => request('end_numero'),
+                        'end_complemento' => request('end_complemento'),
+                        'nom_apelido' => request('nom_apelido'),
+                        'tel_membro' => request('tel_membro'),
                         'ind_aprovado' => false,
                         'usu_autorizador' => null,
                     ]);

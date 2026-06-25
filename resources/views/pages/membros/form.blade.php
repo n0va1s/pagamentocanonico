@@ -13,12 +13,13 @@ new class extends Component {
     public ?int $idt_associacao          = null;
     public string $nom_membro            = '';
     public string $nom_ofx               = '';
+    public string $nom_apelido           = '';
     public string $eml_membro            = '';
     public string $tel_membro            = '';
 
     // Endereço
     public string $end_logradouro        = '';
-    public string $end_mumero            = '';
+    public string $end_numero            = '';
     public string $end_complemento       = '';
 
     // Associação
@@ -34,10 +35,11 @@ new class extends Component {
             $this->idt_associacao        = $membro->idt_associacao;
             $this->nom_membro            = $membro->nom_membro;
             $this->nom_ofx               = $membro->nom_ofx ?? '';
+            $this->nom_apelido           = $membro->nom_apelido ?? '';
             $this->eml_membro            = $membro->eml_membro;
             $this->tel_membro            = $membro->tel_membro ?? '';
             $this->end_logradouro        = $membro->end_logradouro ?? '';
-            $this->end_mumero            = $membro->end_mumero ?? '';
+            $this->end_numero            = $membro->end_numero ?? '';
             $this->end_complemento       = $membro->end_complemento ?? '';
             $this->tip_associado         = $membro->tip_associado->value ?? '';
 
@@ -54,10 +56,11 @@ new class extends Component {
             'idt_associacao'         => ['required', 'exists:associacoes,idt_associacao'],
             'nom_membro'             => ['required', 'string', 'max:255'],
             'nom_ofx'                => ['nullable', 'string', 'max:255'],
+            'nom_apelido'            => ['nullable', 'string', 'max:100'],
             'eml_membro'             => ['required', 'email', 'max:255', Rule::unique('membros', 'eml_membro')->ignore($ignorarId, 'idt_membro')],
             'tel_membro'             => ['nullable', 'string', 'max:20'],
             'end_logradouro'         => ['nullable', 'string', 'max:150'],
-            'end_mumero'             => ['nullable', 'string', 'max:20'],
+            'end_numero'             => ['nullable', 'string', 'max:20'],
             'end_complemento'        => ['nullable', 'string', 'max:150'],
             'tip_associado'          => ['required', Rule::enum(Perfil::class)],
 
@@ -132,6 +135,17 @@ new class extends Component {
                         autocomplete="off"
                     />
                     <flux:error name="nom_membro" />
+                </flux:field>
+
+                <flux:field class="md:col-span-2">
+                    <flux:label for="nom_apelido">Apelido</flux:label>
+                    <flux:input
+                        id="nom_apelido"
+                        wire:model="nom_apelido"
+                        placeholder="Ex: Joãozinho"
+                        autocomplete="off"
+                    />
+                    <flux:error name="nom_apelido" />
                 </flux:field>
 
                 <flux:field class="md:col-span-2">
@@ -221,13 +235,13 @@ new class extends Component {
                 </flux:field>
 
                 <flux:field>
-                    <flux:label for="end_mumero">Número</flux:label>
+                    <flux:label for="end_numero">Número</flux:label>
                     <flux:input
-                        id="end_mumero"
-                        wire:model="end_mumero"
+                        id="end_numero"
+                        wire:model="end_numero"
                         placeholder="123"
                     />
-                    <flux:error name="end_mumero" />
+                    <flux:error name="end_numero" />
                 </flux:field>
 
                 <flux:field class="md:col-span-3">

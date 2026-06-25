@@ -17,10 +17,11 @@ class StoreMembroRequest extends FormRequest
     {
         return [
             'nom_membro' => ['required', 'string', 'max:255'],
+            'nom_apelido' => ['nullable', 'string', 'max:100'],
             'eml_membro' => ['required', 'email', 'max:255', Rule::unique('membros', 'eml_membro')],
             'tel_membro' => ['nullable', 'string', 'max:20'],
             'end_logradouro' => ['nullable', 'string', 'max:150'],
-            'end_mumero' => ['nullable', 'string', 'max:20'],
+            'end_numero' => ['nullable', 'string', 'max:20'],
             'end_complemento' => ['nullable', 'string', 'max:150'],
             'tip_associado' => ['required', 'string', Rule::enum(Perfil::class)],
             'des_telegram_chat_id' => ['nullable', 'string', 'max:50'],
