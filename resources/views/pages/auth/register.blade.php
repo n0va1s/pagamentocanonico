@@ -51,6 +51,7 @@
                 <!-- Número -->
                 <div class="flex-1">
                     <flux:input
+                        id="end_numero"
                         name="end_numero"
                         label="Número"
                         :value="old('end_numero')"
@@ -62,6 +63,7 @@
                 <!-- Complemento -->
                 <div class="flex-1">
                     <flux:input
+                        id="end_complemento"
                         name="end_complemento"
                         label="Complemento"
                         :value="old('end_complemento')"
@@ -84,17 +86,17 @@
 
             <!-- Associação -->
             <flux:select
-                name="idt_associacao"
+                id="idt_associacao_disabled"
                 :label="__('Associação')"
                 placeholder="Selecione a associação..."
-                required
             >
                 @foreach(\App\Models\Associacao::orderBy('nom_associacao')->get() as $assoc)
-                    <flux:select.option value="{{ $assoc->idt_associacao }}">
+                    <flux:select.option value="{{ $assoc->idt_associacao }}" :selected="auth()->user()?->membro?->idt_associacao === $assoc->idt_associacao">
                         {{ $assoc->nom_associacao }}
                     </flux:select.option>
                 @endforeach
             </flux:select>
+            <input type="hidden" name="idt_associacao" value="{{ auth()->user()?->membro?->idt_associacao }}">
 
             <!-- Password -->
             <flux:input
@@ -132,4 +134,41 @@
             <flux:link :href="route('login')" wire:navigate>{{ __('Log in') }}</flux:link>
         </div>
     </div>
+
+    <script>
+        (function() {
+            function initAddressFields() {
+                const endNumero = document.getElementById('end_numero');
+                const endComplemento = document.getElementById('end_complemento');
+
+                if (endNumero && endComplemento) {
+                    if (endNumero.dataset.hasListener) return;
+                    endNumero.dataset.hasListener = 'true';
+
+                    endNumero.addEventListener('input', function() {
+                        const val = this.value;
+                        if (/[a-zA-Z]/.test(val)) {
+                            const numbers = val.replace(/[^0-9]/g, '');
+                            const letters = val.replace(/[^a-zA-Z]/g, '');
+                            
+                            this.value = numbers;
+                            
+                            const lotInfo = `Lote ${letters.toUpperCase()}`;
+                            
+                            if (endComplemento.value.trim() === '') {
+                                endComplemento.value = lotInfo;
+                            } else if (!endComplemento.value.includes(lotInfo)) {
+                                endComplemento.value = `${endComplemento.value.trim()} ${lotInfo}`;
+                            }
+                        } else {
+                            this.value = val.replace(/[^0-9]/g, '');
+                        }
+                    });
+                }
+            }
+
+            document.addEventListener('DOMContentLoaded', initAddressFields);
+            document.addEventListener('livewire:navigated', initAddressFields);
+        })();
+    </script>
 </x-layouts::auth>

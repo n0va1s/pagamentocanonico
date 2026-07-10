@@ -35,7 +35,7 @@ new class extends Component {
             'dat_envio' => now(),
         ]);
         
-        $this->dispatch('toast', message: "Status de {$envio->nom_destinatario} atualizado!", variant: 'success');
+        \Flux::toast(variant: 'success', text: "Status de {$envio->nom_destinatario} atualizado!");
     }
 
     public function resetarEnvio(int $envioId): void
@@ -46,7 +46,7 @@ new class extends Component {
             'dat_envio' => null,
         ]);
 
-        $this->dispatch('toast', message: "Envio de {$envio->nom_destinatario} resetado.", variant: 'success');
+        \Flux::toast(variant: 'success', text: "Envio de {$envio->nom_destinatario} resetado.");
     }
 
     public function dispararProximoPendente(): void
@@ -56,7 +56,7 @@ new class extends Component {
             ->first();
 
         if (!$proximo) {
-            $this->dispatch('toast', message: 'Todos os contatos desta campanha já foram enviados.', variant: 'success');
+            \Flux::toast(variant: 'success', text: 'Todos os contatos desta campanha já foram enviados.');
             return;
         }
 
@@ -68,7 +68,7 @@ new class extends Component {
         ]);
 
         $this->dispatch('abrir-whatsapp', url: $url);
-        $this->dispatch('toast', message: "Abrindo chat de {$proximo->nom_destinatario}...", variant: 'success');
+        \Flux::toast(variant: 'success', text: "Abrindo chat de {$proximo->nom_destinatario}...");
     }
 
     public function gerarUrlWhatsapp(MensagemEnvio $envio): string

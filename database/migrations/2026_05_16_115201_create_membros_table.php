@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('membros', function (Blueprint $table) {
             $table->id('idt_membro');
-            $table->foreignId('idt_associacao')->constrained('associacoes', 'idt_associacao')->cascadeOnDelete();
+            $table->foreignId('idt_associacao')->nullable()->constrained('associacoes', 'idt_associacao')->cascadeOnDelete();
             $table->string('nom_membro');
             $table->string('nom_ofx')->nullable(); // Nome exato como aparece no extrato OFX. Quando preenchido, tem prioridade sobre nom_membro no matching.
             $table->string('eml_membro')->unique();

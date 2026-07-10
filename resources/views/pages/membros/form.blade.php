@@ -45,6 +45,7 @@ new class extends Component {
 
         } else {
             $this->idt_associacao        = auth()->user()->membro?->idt_associacao;
+            $this->tip_associado         = Perfil::MEMBRO->value;
         }
     }
 
@@ -91,11 +92,11 @@ new class extends Component {
 
         if ($this->membro?->exists) {
             $this->membro->update($dados);
-            $this->dispatch('toast', message: 'Membro atualizado com sucesso!', variant: 'success');
+            \Flux::toast(variant: 'success', text: __('messages.alerts.success.saved'));
         } else {
             $dados['ind_aprovado'] = true; // Auto approve manually created members
             Membro::create($dados);
-            $this->dispatch('toast', message: 'Membro cadastrado com sucesso!', variant: 'success');
+            \Flux::toast(variant: 'success', text: __('messages.alerts.success.saved'));
             $this->redirecionar();
         }
     }
@@ -200,6 +201,7 @@ new class extends Component {
                 </flux:field>
                 @endif
 
+                @if($editando)
                 <flux:field>
                     <flux:label required for="tip_associado">Tipo de associação</flux:label>
                     <flux:select id="tip_associado" wire:model="tip_associado">
@@ -212,6 +214,7 @@ new class extends Component {
                     </flux:select>
                     <flux:error name="tip_associado" />
                 </flux:field>
+                @endif
 
             </div>
         </flux:card>

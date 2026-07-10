@@ -95,7 +95,7 @@ new class extends Component {
         $destinatarios = $this->obterDestinatarios();
 
         if (count($destinatarios) === 0) {
-            $this->dispatch('toast', message: 'Nenhum destinatário com telefone válido foi encontrado.', variant: 'danger');
+            \Flux::toast(variant: 'danger', text: 'Nenhum destinatário com telefone válido foi encontrado.');
             return;
         }
 
@@ -119,7 +119,7 @@ new class extends Component {
             ]);
         }
 
-        $this->dispatch('toast', message: 'Campanha de WhatsApp configurada com sucesso!', variant: 'success');
+        \Flux::toast(variant: 'success', text: __('messages.alerts.success.saved'));
 
         return redirect()->route('mensagens.show', ['mensagem' => $mensagem->idt_mensagem]);
     }

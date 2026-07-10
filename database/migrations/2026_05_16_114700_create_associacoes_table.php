@@ -16,8 +16,8 @@ return new class extends Migration
             $table->string('nom_associacao');
             $table->string('tel_contato')->nullable();
             $table->string('des_chave_pix')->nullable();
-             $table->decimal('val_taxa', 10, 2)->nullable()->after('des_chave_pix');
-            $table->decimal('val_anual', 10, 2)->nullable()->after('val_taxa');
+            $table->decimal('val_taxa', 10, 2)->nullable();
+            $table->decimal('val_anual', 10, 2)->nullable();
             $table->timestamps();
             $table->softDeletes();
         });

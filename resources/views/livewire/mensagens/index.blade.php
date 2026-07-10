@@ -66,107 +66,97 @@ new #[Title('Mensagens')] class extends Component {
         </div>
     </flux:card>
 
-    {{-- Tabela --}}
-    <flux:card class="overflow-x-auto p-0">
-        <flux:table>
-            <flux:table.columns>
-                <flux:table.column>Campanha</flux:table.column>
-                <flux:table.column class="hidden sm:table-cell">Associação</flux:table.column>
-                <flux:table.column class="hidden sm:table-cell">Público-Alvo</flux:table.column>
-                <flux:table.column class="hidden md:table-cell">Progresso</flux:table.column>
-                <flux:table.column class="hidden lg:table-cell">Quem Enviou</flux:table.column>
-                <flux:table.column class="hidden sm:table-cell">Data de Criação</flux:table.column>
-                <flux:table.column class="text-right">Ações</flux:table.column>
-            </flux:table.columns>
-
-            <flux:table.rows>
-                @forelse ($mensagens as $msg)
-                    <flux:table.row :key="'msg-'.$msg->idt_mensagem">
-                        <flux:table.cell>
-                            <div class="font-semibold text-zinc-950 dark:text-white">
+    {{-- Lista/Cards --}}
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        @forelse ($mensagens as $msg)
+            <flux:card class="flex flex-col justify-between p-5 space-y-4" wire:key="msg-{{ $msg->idt_mensagem }}">
+                <div class="space-y-3">
+                    {{-- Cabeçalho da Campanha --}}
+                    <div>
+                        <div class="flex items-start justify-between gap-2">
+                            <h3 class="font-bold text-base text-neutral-800 dark:text-neutral-200 truncate" title="{{ $msg->nom_campanha }}">
                                 {{ $msg->nom_campanha }}
-                            </div>
-                            <div class="text-xs text-zinc-500 truncate max-w-xs" title="{{ $msg->txt_mensagem }}">
-                                {{ Str::limit($msg->txt_mensagem, 60) }}
-                            </div>
-                            {{-- Mobile view subtext --}}
-                            <div class="block sm:hidden text-2xs text-zinc-400 mt-1">
-                                {{ $msg->associacao->nom_associacao }} • {{ $msg->created_at->format('d/m H:i') }}
-                            </div>
-                        </flux:table.cell>
-
-                        <flux:table.cell class="hidden sm:table-cell">
-                            <div class="font-medium text-zinc-800 dark:text-zinc-200">
-                                {{ $msg->associacao->nom_associacao }}
-                            </div>
-                        </flux:table.cell>
-
-                        <flux:table.cell class="hidden sm:table-cell">
+                            </h3>
                             @if ($msg->tip_destinatario === 'A')
-                                <flux:badge color="blue" size="sm">Todos</flux:badge>
+                                <flux:badge color="blue" size="sm" class="flex-shrink-0">Todos</flux:badge>
                             @elseif ($msg->tip_destinatario === 'D')
-                                <flux:badge color="green" size="sm">Adimplentes</flux:badge>
+                                <flux:badge color="green" size="sm" class="flex-shrink-0">Adimplentes</flux:badge>
                             @elseif ($msg->tip_destinatario === 'I')
-                                <flux:badge color="red" size="sm">Inadimplentes</flux:badge>
+                                <flux:badge color="red" size="sm" class="flex-shrink-0">Inadimplentes</flux:badge>
                             @endif
-                        </flux:table.cell>
+                        </div>
+                        <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-1 line-clamp-2" title="{{ $msg->txt_mensagem }}">
+                            {{ $msg->txt_mensagem }}
+                        </p>
+                    </div>
 
-                        <flux:table.cell class="hidden md:table-cell">
-                            <div class="flex flex-col gap-1 w-32">
-                                <div class="flex justify-between text-2xs font-semibold text-zinc-600 dark:text-zinc-400">
-                                    <span>{{ $msg->envios_sucesso_count }} / {{ $msg->envios_count }}</span>
-                                    <span>{{ $msg->envios_count > 0 ? round(($msg->envios_sucesso_count / $msg->envios_count) * 100) : 0 }}%</span>
-                                </div>
-                                <div class="w-full bg-zinc-200 dark:bg-zinc-700 h-1.5 rounded-full overflow-hidden">
-                                    @php
-                                        $percent = $msg->envios_count > 0 ? ($msg->envios_sucesso_count / $msg->envios_count) * 100 : 0;
-                                        $progressColor = $percent === 100 ? 'bg-green-500' : 'bg-blue-500';
-                                    @endphp
-                                    <div class="{{ $progressColor }} h-1.5 rounded-full" style="width: {{ $percent }}%"></div>
-                                </div>
+                    {{-- Detalhes/Metadata --}}
+                    <div class="pt-2 border-t border-neutral-100 dark:border-neutral-800/60 space-y-2.5 text-xs">
+                        <div class="flex justify-between items-center gap-2">
+                            <span class="text-neutral-400 dark:text-neutral-500">Associação:</span>
+                            <span class="font-medium text-neutral-700 dark:text-neutral-300 truncate max-w-[180px]">
+                                {{ $msg->associacao->nom_associacao }}
+                            </span>
+                        </div>
+
+                        {{-- Progresso de Envios --}}
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[11px] font-semibold text-neutral-600 dark:text-neutral-400">
+                                <span class="text-neutral-400 dark:text-neutral-500 font-normal">Progresso:</span>
+                                <span>{{ $msg->envios_sucesso_count }} / {{ $msg->envios_count }} ({{ $msg->envios_count > 0 ? round(($msg->envios_sucesso_count / $msg->envios_count) * 100) : 0 }}%)</span>
                             </div>
-                        </flux:table.cell>
+                            <div class="w-full bg-neutral-100 dark:bg-neutral-800 h-2 rounded-full overflow-hidden">
+                                @php
+                                    $percent = $msg->envios_count > 0 ? ($msg->envios_sucesso_count / $msg->envios_count) * 100 : 0;
+                                    $progressColor = $percent === 100 ? 'bg-green-500' : 'bg-blue-500';
+                                @endphp
+                                <div class="{{ $progressColor }} h-2 rounded-full transition-all duration-300" style="width: {{ $percent }}%"></div>
+                            </div>
+                        </div>
 
-                        <flux:table.cell class="hidden lg:table-cell">
-                            <div class="flex items-center gap-2">
-                                <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-zinc-200 dark:bg-zinc-700 text-3xs font-bold text-zinc-800 dark:text-zinc-200">
+                        {{-- Quem Enviou --}}
+                        <div class="flex justify-between items-center gap-2">
+                            <span class="text-neutral-400 dark:text-neutral-500">Quem enviou:</span>
+                            <div class="flex items-center gap-1.5 overflow-hidden">
+                                <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-neutral-200 dark:bg-neutral-800 text-[9px] font-bold text-neutral-700 dark:text-neutral-300">
                                     {{ $msg->usuario->initials() }}
                                 </span>
-                                <span class="text-zinc-800 dark:text-zinc-200">{{ $msg->usuario->name }}</span>
+                                <span class="text-neutral-700 dark:text-neutral-300 truncate max-w-[120px]">{{ $msg->usuario->name }}</span>
                             </div>
-                        </flux:table.cell>
+                        </div>
 
-                        <flux:table.cell class="hidden sm:table-cell text-sm text-zinc-600 dark:text-zinc-400">
-                            {{ $msg->created_at->format('d/m/Y H:i') }}
-                        </flux:table.cell>
+                        {{-- Data de Criação --}}
+                        <div class="flex justify-between">
+                            <span class="text-neutral-400 dark:text-neutral-500">Criada em:</span>
+                            <span class="font-medium text-neutral-700 dark:text-neutral-300">{{ $msg->created_at->format('d/m/Y H:i') }}</span>
+                        </div>
+                    </div>
+                </div>
 
-                        <flux:table.cell class="text-right">
-                            <div class="flex justify-end gap-2">
-                                <flux:button
-                                    icon="eye"
-                                    size="sm"
-                                    variant="ghost"
-                                    :href="route('mensagens.show', ['mensagem' => $msg->idt_mensagem])"
-                                    wire:navigate
-                                    aria-label="Ver detalhes"
-                                />
-                            </div>
-                        </flux:table.cell>
-                    </flux:table.row>
-                @empty
-                    <flux:table.row>
-                        <flux:table.cell colspan="7" class="text-center py-12 text-zinc-500">
-                            Nenhuma campanha registrada no sistema.
-                        </flux:table.cell>
-                    </flux:table.row>
-                @endforelse
-            </flux:table.rows>
-        </flux:table>
-
-        @if ($mensagens->hasPages())
-            <div class="px-4 py-3 border-t border-zinc-200 dark:border-zinc-700">
-                {{ $mensagens->links() }}
+                {{-- Ação --}}
+                <div class="pt-2">
+                    <flux:button
+                        icon="eye"
+                        size="sm"
+                        variant="primary"
+                        :href="route('mensagens.show', ['mensagem' => $msg->idt_mensagem])"
+                        wire:navigate
+                        class="w-full"
+                    >
+                        Visualizar Detalhes
+                    </flux:button>
+                </div>
+            </flux:card>
+        @empty
+            <div class="col-span-full py-12 text-center text-zinc-400 bg-white border border-neutral-200 dark:border-neutral-700 dark:bg-zinc-900 rounded-xl shadow-xs">
+                Nenhuma campanha registrada no sistema.
             </div>
-        @endif
-    </flux:card>
+        @endforelse
+    </div>
+
+    @if ($mensagens->hasPages())
+        <div class="mt-6">
+            {{ $mensagens->links() }}
+        </div>
+    @endif
 </div>

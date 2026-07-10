@@ -60,7 +60,7 @@ new #[Title('Cadastro de Associações')] class extends Component {
         $this->novaAssociacaoTaxa = null;
         $this->novaAssociacaoAnual = null;
         $this->dispatch('close-modal', name: 'nova-associacao-modal');
-        $this->dispatch('toast', message: 'Associação cadastrada com sucesso!', variant: 'success');
+        \Flux::toast(variant: 'success', text: __('messages.alerts.success.saved'));
     }
 
     public function iniciarEdicao(int $id, string $nome, ?string $telefone = null, ?string $pix = null, ?float $taxa = null, ?float $anual = null): void
@@ -101,7 +101,7 @@ new #[Title('Cadastro de Associações')] class extends Component {
         $this->editandoAssociacaoPix = '';
         $this->editandoAssociacaoTaxa = null;
         $this->editandoAssociacaoAnual = null;
-        $this->dispatch('toast', message: 'Associação atualizada com sucesso!', variant: 'success');
+        \Flux::toast(variant: 'success', text: __('messages.alerts.success.saved'));
     }
 
     public function cancelarEdicao(): void
@@ -119,7 +119,7 @@ new #[Title('Cadastro de Associações')] class extends Component {
         $assoc = Associacao::findOrFail($id);
         $assoc->delete();
 
-        $this->dispatch('toast', message: 'Associação excluída com sucesso!', variant: 'success');
+        \Flux::toast(variant: 'success', text: __('messages.alerts.success.deleted'));
     }
 
     public function with(): array
@@ -171,80 +171,99 @@ new #[Title('Cadastro de Associações')] class extends Component {
         </div>
     </flux:card>
 
-    {{-- Tabela --}}
-    <flux:card class="overflow-x-auto p-0">
-        <flux:table>
-            <flux:table.columns>
-                <flux:table.column>Nome da Associação</flux:table.column>
-                <flux:table.column class="hidden sm:table-cell">Total de Membros</flux:table.column>
-                <flux:table.column class="text-right">Ações</flux:table.column>
-            </flux:table.columns>
-
-            <flux:table.rows>
-                @forelse($associacoes as $assoc)
-                    <flux:table.row wire:key="assoc-{{ $assoc->idt_associacao }}">
-                        <flux:table.cell class="font-medium w-full max-w-xs sm:max-w-none">
-                            @if($editandoAssociacaoId === $assoc->idt_associacao)
-                                <div class="flex flex-col gap-2 w-full">
-                                    <flux:input wire:model="editandoAssociacaoNome" size="sm" aria-label="Editar nome da associação" placeholder="Nome" />
-                                    <flux:input wire:model="editandoAssociacaoTelefone" size="sm" aria-label="Editar telefone" placeholder="Telefone" />
-                                    <flux:input wire:model="editandoAssociacaoPix" size="sm" aria-label="Editar PIX" placeholder="Chave PIX" />
-                                    <flux:input wire:model="editandoAssociacaoTaxa" size="sm" aria-label="Editar Mensalidade" placeholder="Mensalidade" type="number" step="0.01" />
-                                    <flux:input wire:model="editandoAssociacaoAnual" size="sm" aria-label="Editar Anuidade" placeholder="Anuidade" type="number" step="0.01" />
-                                    <div class="flex gap-2">
-                                        <flux:button wire:click="salvarEdicao" size="xs" variant="primary">Salvar</flux:button>
-                                        <flux:button wire:click="cancelarEdicao" size="xs" variant="ghost">Cancelar</flux:button>
-                                    </div>
+    {{-- Lista/Cards --}}
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        @forelse($associacoes as $assoc)
+            <flux:card class="flex flex-col justify-between p-5 space-y-4" wire:key="assoc-{{ $assoc->idt_associacao }}">
+                @if($editandoAssociacaoId === $assoc->idt_associacao)
+                    {{-- Modo de Edição --}}
+                    <div class="flex flex-col gap-3 w-full">
+                        <flux:field>
+                            <flux:label>Nome da Associação</flux:label>
+                            <flux:input wire:model="editandoAssociacaoNome" size="sm" placeholder="Nome" />
+                        </flux:field>
+                        <flux:field>
+                            <flux:label>Telefone</flux:label>
+                            <flux:input wire:model="editandoAssociacaoTelefone" size="sm" placeholder="Telefone" />
+                        </flux:field>
+                        <flux:field>
+                            <flux:label>Chave PIX</flux:label>
+                            <flux:input wire:model="editandoAssociacaoPix" size="sm" placeholder="Chave PIX" />
+                        </flux:field>
+                        <flux:field>
+                            <flux:label>Mensalidade</flux:label>
+                            <flux:input wire:model="editandoAssociacaoTaxa" size="sm" placeholder="Mensalidade" type="number" step="0.01" />
+                        </flux:field>
+                        <flux:field>
+                            <flux:label>Anuidade</flux:label>
+                            <flux:input wire:model="editandoAssociacaoAnual" size="sm" placeholder="Anuidade" type="number" step="0.01" />
+                        </flux:field>
+                        <div class="flex gap-2 pt-2">
+                            <flux:button wire:click="salvarEdicao" size="sm" variant="primary">Salvar</flux:button>
+                            <flux:button wire:click="cancelarEdicao" size="sm" variant="ghost">Cancelar</flux:button>
+                        </div>
+                    </div>
+                @else
+                    {{-- Modo de Exibição --}}
+                    <div class="space-y-3">
+                        <div class="flex items-start justify-between gap-2">
+                            <div>
+                                <h3 class="font-bold text-lg text-neutral-800 dark:text-neutral-200">
+                                    {{ $assoc->nom_associacao }}
+                                </h3>
+                                <div class="mt-1">
+                                    <flux:badge size="sm" color="zinc" class="font-semibold">
+                                        {{ $assoc->membros_count }} {{ Str::plural('membro', $assoc->membros_count) }}
+                                    </flux:badge>
                                 </div>
-                            @else
-                                <div class="flex flex-col">
-                                    <span class="font-semibold text-neutral-800 dark:text-neutral-200">{{ $assoc->nom_associacao }}</span>
-                                    @if($assoc->tel_contato || $assoc->chave_pix || $assoc->val_taxa || $assoc->val_anual)
-                                        <span class="text-xs text-neutral-500 mt-1">
-                                            @if($assoc->tel_contato) Tel: {{ $assoc->tel_contato }} @endif
-                                            @if($assoc->tel_contato && $assoc->chave_pix) | @endif
-                                            @if($assoc->chave_pix) PIX: {{ $assoc->chave_pix }} @endif
-                                            @if($assoc->chave_pix && $assoc->val_taxa) | @endif
-                                            @if($assoc->val_taxa) Mensalidade: R$ {{ number_format($assoc->val_taxa, 2, ',', '.') }} @endif
-                                            @if($assoc->val_taxa && $assoc->val_anual) | @endif
-                                            @if($assoc->val_anual) Anuidade: R$ {{ number_format($assoc->val_anual, 2, ',', '.') }} @endif
-                                        </span>
-                                    @endif
+                            </div>
+                            <div class="flex gap-1 flex-shrink-0">
+                                <flux:button wire:click="iniciarEdicao({{ $assoc->idt_associacao }}, '{{ addslashes($assoc->nom_associacao) }}', '{{ addslashes($assoc->tel_contato ?? '') }}', '{{ addslashes($assoc->chave_pix ?? '') }}', {{ $assoc->val_taxa ? "'".$assoc->val_taxa."'" : 'null' }}, {{ $assoc->val_anual ? "'".$assoc->val_anual."'" : 'null' }})" size="sm" variant="ghost" icon="pencil" aria-label="Editar associação" />
+                                <flux:button wire:click="excluirAssociacao({{ $assoc->idt_associacao }})" wire:confirm="Deseja remover esta associação?" size="sm" variant="ghost" icon="trash" class="text-red-500 hover:text-red-700" aria-label="Remover associação" />
+                            </div>
+                        </div>
+
+                        <div class="pt-2 border-t border-neutral-100 dark:border-neutral-800/60 space-y-2 text-xs text-neutral-600 dark:text-neutral-400">
+                            @if($assoc->tel_contato)
+                                <div class="flex justify-between">
+                                    <span class="text-neutral-400 dark:text-neutral-500">Telefone:</span>
+                                    <span class="font-medium text-neutral-800 dark:text-neutral-200">{{ $assoc->tel_contato }}</span>
                                 </div>
                             @endif
-                        </flux:table.cell>
-
-                        <flux:table.cell class="hidden sm:table-cell">
-                            <flux:badge size="sm" color="zinc" class="font-semibold">
-                                {{ $assoc->membros_count }} {{ Str::plural('membro', $assoc->membros_count) }}
-                            </flux:badge>
-                        </flux:table.cell>
-
-                        <flux:table.cell class="text-right">
-                            @if($editandoAssociacaoId !== $assoc->idt_associacao)
-                                <div class="flex justify-end gap-1">
-                                    <flux:button wire:click="iniciarEdicao({{ $assoc->idt_associacao }}, '{{ addslashes($assoc->nom_associacao) }}', '{{ addslashes($assoc->tel_contato ?? '') }}', '{{ addslashes($assoc->chave_pix ?? '') }}', {{ $assoc->val_taxa ? "'".$assoc->val_taxa."'" : 'null' }}, {{ $assoc->val_anual ? "'".$assoc->val_anual."'" : 'null' }})" size="sm" variant="ghost" icon="pencil" aria-label="Editar associação" />
-                                    <flux:button wire:click="excluirAssociacao({{ $assoc->idt_associacao }})" wire:confirm="Deseja remover esta associação?" size="sm" variant="ghost" icon="trash" class="text-red-500 hover:text-red-700" aria-label="Remover associação" />
+                            @if($assoc->chave_pix)
+                                <div class="flex justify-between items-center gap-2">
+                                    <span class="text-neutral-400 dark:text-neutral-500">Chave PIX:</span>
+                                    <span class="font-mono text-neutral-800 dark:text-neutral-200 truncate select-all">{{ $assoc->chave_pix }}</span>
                                 </div>
                             @endif
-                        </flux:table.cell>
-                    </flux:table.row>
-                @empty
-                    <flux:table.row>
-                        <flux:table.cell colspan="3" class="py-12 text-center text-zinc-400">
-                            Nenhuma associação encontrada.
-                        </flux:table.cell>
-                    </flux:table.row>
-                @endforelse
-            </flux:table.rows>
-        </flux:table>
-
-        @if ($associacoes->hasPages())
-            <div class="px-4 py-3 border-t border-zinc-200 dark:border-zinc-700">
-                {{ $associacoes->links() }}
+                            @if($assoc->val_taxa)
+                                <div class="flex justify-between">
+                                    <span class="text-neutral-400 dark:text-neutral-500">Mensalidade:</span>
+                                    <span class="font-semibold text-neutral-800 dark:text-neutral-200">R$ {{ number_format($assoc->val_taxa, 2, ',', '.') }}</span>
+                                </div>
+                            @endif
+                            @if($assoc->val_anual)
+                                <div class="flex justify-between">
+                                    <span class="text-neutral-400 dark:text-neutral-500">Anuidade:</span>
+                                    <span class="font-semibold text-neutral-800 dark:text-neutral-200">R$ {{ number_format($assoc->val_anual, 2, ',', '.') }}</span>
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+                @endif
+            </flux:card>
+        @empty
+            <div class="col-span-full py-12 text-center text-zinc-400 bg-white border border-neutral-200 dark:border-neutral-700 dark:bg-zinc-900 rounded-xl shadow-xs">
+                Nenhuma associação encontrada.
             </div>
-        @endif
-    </flux:card>
+        @endforelse
+    </div>
+
+    @if ($associacoes->hasPages())
+        <div class="mt-6">
+            {{ $associacoes->links() }}
+        </div>
+    @endif
 
     {{-- Modal de Criação --}}
     <flux:modal name="nova-associacao-modal" class="max-w-lg">

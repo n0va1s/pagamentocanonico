@@ -48,6 +48,7 @@ new #[Title('Dashboard')] class extends Component {
             } else {
                 $this->contactName = $user->name;
                 $this->contactEmail = $user->email;
+                $this->contactAssociacaoId = $user->membro?->idt_associacao;
             }
         } else {
             $importId = request()->query('import') ?? request()->query('ofx');
@@ -58,10 +59,7 @@ new #[Title('Dashboard')] class extends Component {
                 $this->selectedImportId = $latest ? $latest->idt_ofx : null;
             }
             
-            $associacaoId = request()->query('associacao');
-            if ($associacaoId) {
-                $this->selectedAssociacaoId = (int) $associacaoId;
-            }
+            $this->selectedAssociacaoId = $user->membro?->idt_associacao;
         }
     }
 
@@ -76,7 +74,7 @@ new #[Title('Dashboard')] class extends Component {
     {
         $membro = auth()->user()->membro;
         if (!$membro) {
-            $this->dispatch('toast', message: 'Membro não cadastrado.', variant: 'danger');
+            \Flux::toast(variant: 'danger', text: 'Membro não cadastrado.');
             return;
         }
         $this->validate([
@@ -97,19 +95,20 @@ new #[Title('Dashboard')] class extends Component {
             'end_complemento' => $this->end_complemento,
             'des_telegram_chat_id' => $this->des_telegram_chat_id,
         ]);
-        $this->dispatch('toast', message: 'Dados atualizados com sucesso.', variant: 'success');
+        \Flux::toast(variant: 'success', text: __('messages.alerts.success.saved'));
     }
 
     public function submitContact(): void
     {
         $membro = auth()->user()->membro;
+        $this->contactAssociacaoId = auth()->user()->membro?->idt_associacao;
         $rules = [
             'contactName' => 'required|string|max:100',
             'contactEmail' => 'required|email|max:100',
             'contactMessage' => 'required|string|max:1000',
         ];
         if (!$membro) {
-            $rules['contactAssociacaoId'] = 'required|exists:associacoes,idt_associacao';
+            $rules['contactAssociacaoId'] = 'nullable';
         }
         $this->validate($rules);
 
@@ -140,9 +139,9 @@ new #[Title('Dashboard')] class extends Component {
             }
         }
         if ($enviouTelegram) {
-            $this->dispatch('toast', message: 'Mensagem enviada com sucesso!', variant: 'success');
+            \Flux::toast(variant: 'success', text: 'Mensagem enviada com sucesso!');
         } else {
-            $this->dispatch('toast', message: 'Mensagem registrada. (Falha temporária ao enviar ao Telegram)', variant: 'warning');
+            \Flux::toast(variant: 'warning', text: 'Mensagem registrada. (Falha temporária ao enviar ao Telegram)');
         }
         $this->reset(['contactMessage']);
     }
@@ -367,7 +366,7 @@ new #[Title('Dashboard')] class extends Component {
                                 <form wire:submit="submitContact" style="display:flex;flex-direction:column;gap:1rem">
                                     <flux:input label="Seu nome" wire:model="contactName" />
                                     <flux:input label="Seu e-mail" wire:model="contactEmail" disabled />
-                                    <flux:select label="Associação" wire:model="contactAssociacaoId" placeholder="Selecione a associação..." required>
+                                    <flux:select label="Associação" wire:model="contactAssociacaoId" placeholder="Selecione a associação..." disabled>
                                         @foreach($associacoes as $assoc)
                                             <flux:select.option value="{{ $assoc->idt_associacao }}">{{ $assoc->nom_associacao }}</flux:select.option>
                                         @endforeach
@@ -502,34 +501,27 @@ new #[Title('Dashboard')] class extends Component {
                                 <div class="pc-card-body">
                                     <form wire:submit="updateProfile" style="display:flex;flex-direction:column;gap:0">
 
-                                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
-                                            <div style="grid-column:1/-1">
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                                            <div class="sm:col-span-2">
                                                 <flux:field>
                                                     <flux:label required>Nome completo</flux:label>
                                                     <flux:input wire:model="nom_membro" />
                                                     <flux:error name="nom_membro" />
                                                 </flux:field>
                                             </div>
-                                            <div style="grid-column:1/-1">
-                                                <flux:field>
-                                                    <flux:label>Apelido</flux:label>
-                                                    <flux:input wire:model="nom_apelido" placeholder="Seu apelido..." />
-                                                    <flux:error name="nom_apelido" />
-                                                </flux:field>
-                                            </div>
                                             <flux:field>
-                                                <flux:label>Telefone / WhatsApp</flux:label>
+                                                <flux:label>Apelido</flux:label>
+                                                <flux:input wire:model="nom_apelido" placeholder="Seu apelido..." />
+                                                <flux:error name="nom_apelido" />
+                                            </flux:field>
+                                            <flux:field>
+                                                <flux:label>WhatsApp</flux:label>
                                                 <flux:input wire:model="tel_membro" placeholder="(00) 00000-0000" />
                                                 <flux:error name="tel_membro" />
                                             </flux:field>
-                                            <flux:field>
-                                                <flux:label>Telegram Chat ID</flux:label>
-                                                <flux:input wire:model="des_telegram_chat_id" placeholder="Ex: 12345678" />
-                                                <flux:error name="des_telegram_chat_id" />
-                                            </flux:field>
-                                            <div style="grid-column:1/-1">
+                                            <div class="sm:col-span-2">
                                                 <flux:field>
-                                                    <flux:label>Logradouro</flux:label>
+                                                    <flux:label>Endereço</flux:label>
                                                     <flux:input wire:model="end_logradouro" />
                                                     <flux:error name="end_logradouro" />
                                                 </flux:field>
@@ -540,7 +532,7 @@ new #[Title('Dashboard')] class extends Component {
                                                 <flux:error name="end_numero" />
                                             </flux:field>
                                             <flux:field>
-                                                <flux:label>Bairro / Complemento</flux:label>
+                                                <flux:label>Complemento</flux:label>
                                                 <flux:input wire:model="end_complemento" />
                                                 <flux:error name="end_complemento" />
                                             </flux:field>
@@ -565,11 +557,9 @@ new #[Title('Dashboard')] class extends Component {
                                 </div>
                                 <div class="pc-card-body">
                                     <p style="font-size:0.8125rem;color:var(--pc-muted);margin-bottom:1.25rem;line-height:1.55">
-                                        Sua mensagem será enviada diretamente à diretoria via Telegram e registrada no painel administrativo.
+                                        Olá <strong>{{ $membro->nom_apelido ?? $membro->nom_membro }}</strong>, sua mensagem será enviada a sua associação <strong>{{ $membro->associacao?->nom_associacao }}</strong>.
                                     </p>
                                     <form wire:submit="submitContact" style="display:flex;flex-direction:column;gap:1rem">
-                                        <flux:input label="Nome" wire:model="contactName" disabled />
-                                        <flux:input label="E-mail" wire:model="contactEmail" disabled />
                                         <flux:textarea label="Mensagem" wire:model="contactMessage" rows="5" placeholder="Escreva sua solicitação aqui..." />
                                         <button type="submit" class="pc-btn pc-btn-primary" style="width:100%;justify-content:center">
                                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
@@ -653,31 +643,41 @@ new #[Title('Dashboard')] class extends Component {
             </div>
         @else
             @if($isAdminDashboard || $importacaoSelecionada)
-                @if($isAdminDashboard)
-                <!-- Seletor de Associação (Admin) -->
-                <div class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-zinc-900">
-                    <div class="flex items-center gap-3">
-                        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
+                <!-- Seletor de Associação (Admin/Diretor) -->
+                <div class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-zinc-900 mb-6">
+                    <div class="flex items-center gap-3 w-full sm:w-auto">
+                        <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
                             <flux:icon name="building-office-2" class="size-5" />
                         </div>
-                        <div class="flex items-center gap-3">
-                            <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Associação Selecionada:</p>
-                            <flux:select wire:model.live="selectedAssociacaoId" class="w-64" placeholder="Todas as Associações (Visão Global)">
-                                <flux:select.option value="">Todas as Associações (Visão Global)</flux:select.option>
-                                @foreach($allAssociacoes as $assoc)
-                                    <flux:select.option value="{{ $assoc->idt_associacao }}">
-                                        {{ $assoc->nom_associacao }}
-                                    </flux:select.option>
-                                @endforeach
-                            </flux:select>
+                        <div class="flex flex-col gap-1 flex-1 sm:flex-initial">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Associação Selecionada</p>
+                            @if(auth()->user()->isAdmin())
+                                <flux:select wire:model.live="selectedAssociacaoId" class="w-full sm:w-64" placeholder="Todas as Associações">
+                                    <flux:select.option value="">Todas as Associações</flux:select.option>
+                                    @foreach($allAssociacoes as $assoc)
+                                        <flux:select.option value="{{ $assoc->idt_associacao }}">
+                                            {{ $assoc->nom_associacao }}
+                                        </flux:select.option>
+                                    @endforeach
+                                </flux:select>
+                            @else
+                                <flux:select wire:model.live="selectedAssociacaoId" class="w-full sm:w-64" disabled>
+                                    @foreach($allAssociacoes as $assoc)
+                                        <flux:select.option value="{{ $assoc->idt_associacao }}">
+                                            {{ $assoc->nom_associacao }}
+                                        </flux:select.option>
+                                    @endforeach
+                                </flux:select>
+                            @endif
                         </div>
                     </div>
                 </div>
-                @else
+
+                @if(!$isAdminDashboard)
                 <!-- Seletor de Importação (Diretor) -->
-                <div class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-zinc-900">
-                    <div class="flex items-center gap-3">
-                        <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
+                <div class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-zinc-900 mb-6">
+                    <div class="flex items-center gap-3 w-full sm:w-auto">
+                        <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
                             <flux:icon name="building-library" class="size-5" />
                         </div>
                         <div>
@@ -689,15 +689,15 @@ new #[Title('Dashboard')] class extends Component {
                         </div>
                     </div>
                     @if($importacoes->count() > 0)
-                    <div class="flex items-center gap-2">
-                        <flux:select wire:model.live="selectedImportId" class="w-64">
+                    <div class="flex items-center gap-2 w-full sm:w-auto">
+                        <flux:select wire:model.live="selectedImportId" class="w-full sm:w-64">
                             @foreach($importacoes as $imp)
                                 <flux:select.option value="{{ $imp->idt_ofx }}">
                                     {{ $imp->des_arquivo }} ({{ $imp->dat_inicio?->format('m/Y') }})
                                 </flux:select.option>
                             @endforeach
                         </flux:select>
-                        <flux:button href="{{ route('upload') }}" icon="plus" size="sm" variant="primary">Novo</flux:button>
+                        <flux:button href="{{ route('upload') }}" icon="plus" size="sm" variant="primary" class="flex-shrink-0">Novo</flux:button>
                     </div>
                     @endif
                 </div>
@@ -818,7 +818,7 @@ new #[Title('Dashboard')] class extends Component {
                                         <tr class="transition hover:bg-neutral-50/50 dark:hover:bg-zinc-800/30 {{ $row['situacao']==='Inadimplente' ? 'bg-red-50/10 dark:bg-red-950/5' : '' }}">
                                             <td class="px-4 py-3">
                                                 <div class="flex items-center gap-2">
-                                                    <div class="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-200 text-xs font-bold text-neutral-600 dark:bg-zinc-700 dark:text-neutral-300">
+                                                    <div class="hidden sm:flex h-8 w-8 items-center justify-center rounded-full bg-neutral-200 text-xs font-bold text-neutral-600 dark:bg-zinc-700 dark:text-neutral-300">
                                                         {{ strtoupper(substr($row['nome'],0,1)) }}
                                                     </div>
                                                     <div>

@@ -12,6 +12,7 @@ new class extends Component {
 
     public function submitContact(): void
     {
+        $this->idt_associacao = auth()->user()?->membro?->idt_associacao;
         $this->validate([
             'nome' => 'required|string|min:3|max:100',
             'email' => 'required|email|max:100',
@@ -41,13 +42,18 @@ new class extends Component {
         $res = $telegram->sendContactRequest($this->nome, $this->email, $this->mensagem);
 
         if ($res['success']) {
-            $this->dispatch('toast', message: 'Mensagem enviada com sucesso para a administração!', variant: 'success');
+            \Flux::toast(variant: 'success', text: 'Mensagem enviada com sucesso para a administração!');
             $this->reset(['nome', 'email', 'mensagem', 'idt_associacao']);
         } else {
             // Se o Telegram falhar, mas salvou no banco, ainda assim informamos que salvou
-            $this->dispatch('toast', message: 'Mensagem registrada localmente. (Falha temporária ao enviar ao Telegram)', variant: 'warning');
+            \Flux::toast(variant: 'warning', text: 'Mensagem registrada localmente. (Falha temporária ao enviar ao Telegram)');
             $this->reset(['nome', 'email', 'mensagem', 'idt_associacao']);
         }
+    }
+
+    public function mount(): void
+    {
+        $this->idt_associacao = auth()->user()?->membro?->idt_associacao;
     }
 
     public function with(): array
@@ -80,7 +86,7 @@ new class extends Component {
             label="Associação" 
             wire:model="idt_associacao" 
             placeholder="Selecione a associação..." 
-            required
+            disabled
         >
             @foreach($associacoes as $assoc)
                 <flux:select.option value="{{ $assoc->idt_associacao }}">{{ $assoc->nom_associacao }}</flux:select.option>

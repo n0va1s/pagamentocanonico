@@ -8,13 +8,20 @@ use Livewire\Attributes\Title;
 new #[Title('Aprovações Pendentes')] class extends Component {
     use WithPagination;
 
+    public string $selectedAssociacaoId = '';
+
+    public function updatedSelectedAssociacaoId(): void
+    {
+        $this->resetPage();
+    }
+
     public function aprovarMembro(int $id): void
     {
         $membro = Membro::withoutGlobalScope('associacao')->findOrFail($id);
 
         // Check permission: director can paginonly approve members of their own association
         if (!auth()->user()->isAdmin() && $membro->idt_associacao !== auth()->user()->membro?->idt_associacao) {
-            $this->dispatch('toast', message: 'Acesso não autorizado.', variant: 'danger');
+            \Flux::toast(variant: 'danger', text: 'Acesso não autorizado.');
             return;
         }
 
@@ -23,7 +30,7 @@ new #[Title('Aprovações Pendentes')] class extends Component {
             'usu_autorizador' => auth()->user()->email,
         ]);
 
-        $this->dispatch('toast', message: 'Vinculação aprovada com sucesso!', variant: 'success');
+        \Flux::toast(variant: 'success', text: __('messages.alerts.success.saved'));
     }
 
     public function with(): array
@@ -33,12 +40,16 @@ new #[Title('Aprovações Pendentes')] class extends Component {
             ->when(!auth()->user()->isAdmin(), function ($q) {
                 $q->where('idt_associacao', auth()->user()->membro?->idt_associacao);
             })
+            ->when(auth()->user()->isAdmin() && $this->selectedAssociacaoId, function ($q) {
+                $q->where('idt_associacao', $this->selectedAssociacaoId);
+            })
             ->with('associacao')
             ->orderBy('nom_membro')
             ->paginate(15);
 
         return [
             'membrosPendentes' => $membrosPendentes,
+            'associacoes' => auth()->user()->isAdmin() ? \App\Models\Associacao::orderBy('nom_associacao')->get() : collect(),
         ];
     }
 }; ?>
@@ -56,71 +67,85 @@ new #[Title('Aprovações Pendentes')] class extends Component {
         </div>
     </div>
 
-    {{-- Lista/Tabela --}}
-    <flux:card>
-        <flux:table>
-            <flux:table.columns>
-                <flux:table.column>Nome</flux:table.column>
-                <flux:table.column>E-mail</flux:table.column>
-                <flux:table.column>Associação</flux:table.column>
-                <flux:table.column>Solicitado em</flux:table.column>
-                <flux:table.column class="text-right">Ação</flux:table.column>
-            </flux:table.columns>
+    @if(auth()->user()->isAdmin())
+        {{-- Filtros --}}
+        <flux:card class="flex flex-col sm:flex-row gap-3">
+            <div class="sm:w-72">
+                <flux:select wire:model.live="selectedAssociacaoId" aria-label="Associação">
+                    <flux:select.option value="">Todas as Associações</flux:select.option>
+                    @foreach ($associacoes as $assoc)
+                        <flux:select.option value="{{ $assoc->idt_associacao }}">
+                            {{ $assoc->nom_associacao }}
+                        </flux:select.option>
+                    @endforeach
+                </flux:select>
+            </div>
+        </flux:card>
+    @endif
 
-            <flux:table.rows>
-                @forelse ($membrosPendentes as $membro)
-                    <flux:table.row wire:key="pendente-{{ $membro->idt_membro }}">
-                        <flux:table.cell class="font-medium">
-                            <div class="flex items-center gap-2">
-                                <div class="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-200 text-xs font-bold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
-                                    {{ strtoupper(substr($membro->nom_membro, 0, 1)) }}
-                                </div>
-                                <span class="font-semibold text-neutral-800 dark:text-neutral-200">{{ $membro->nom_membro }}</span>
-                            </div>
-                        </flux:table.cell>
+    {{-- Lista/Cards --}}
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        @forelse ($membrosPendentes as $membro)
+            <flux:card class="flex flex-col justify-between p-5 space-y-4" wire:key="pendente-{{ $membro->idt_membro }}">
+                <div class="space-y-3">
+                    {{-- Cabeçalho: Iniciais + Nome e E-mail --}}
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                            {{ strtoupper(substr($membro->nom_membro, 0, 1)) }}
+                        </div>
+                        <div class="overflow-hidden">
+                            <h3 class="font-semibold text-neutral-800 dark:text-neutral-200 truncate" title="{{ $membro->nom_membro }}">
+                                {{ $membro->nom_membro }}
+                            </h3>
+                            <p class="text-xs text-neutral-500 dark:text-neutral-400 truncate" title="{{ $membro->eml_membro }}">
+                                {{ $membro->eml_membro }}
+                            </p>
+                        </div>
+                    </div>
 
-                        <flux:table.cell class="text-neutral-600 dark:text-neutral-400">
-                            {{ $membro->eml_membro }}
-                        </flux:table.cell>
-
-                        <flux:table.cell>
-                            <flux:badge size="sm" color="blue" class="uppercase">
+                    {{-- Detalhes da Solicitação --}}
+                    <div class="pt-2 border-t border-neutral-100 dark:border-neutral-800/60 space-y-2 text-xs">
+                        <div class="flex justify-between items-center gap-2">
+                            <span class="text-neutral-400 dark:text-neutral-500">Associação:</span>
+                            <flux:badge size="sm" color="blue" class="uppercase truncate max-w-[180px]">
                                 {{ $membro->associacao?->nom_associacao ?? 'Sem Associação' }}
                             </flux:badge>
-                        </flux:table.cell>
+                        </div>
+                        <div class="flex justify-between items-start gap-2">
+                            <span class="text-neutral-400 dark:text-neutral-500">Solicitado em:</span>
+                            <div class="text-right">
+                                <span class="text-neutral-600 dark:text-neutral-300 font-medium">{{ $membro->created_at->format('d/m/Y H:i') }}</span>
+                                <span class="block text-[10px] text-neutral-400 dark:text-neutral-500 opacity-80">{{ $membro->created_at->diffForHumans() }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-                        <flux:table.cell class="text-xs text-neutral-500 dark:text-neutral-400">
-                            {{ $membro->created_at->format('d/m/Y H:i') }}
-                            <span class="block text-[10px] opacity-60">{{ $membro->created_at->diffForHumans() }}</span>
-                        </flux:table.cell>
-
-                        <flux:table.cell class="text-right">
-                            <flux:button 
-                                wire:click="aprovarMembro({{ $membro->idt_membro }})" 
-                                size="xs" 
-                                variant="primary" 
-                                icon="check"
-                                wire:loading.attr="disabled"
-                            >
-                                Aprovar Adesão
-                            </flux:button>
-                        </flux:table.cell>
-                    </flux:table.row>
-                @empty
-                    <flux:table.row>
-                        <flux:table.cell colspan="5" class="py-12 text-center text-zinc-400">
-                            <flux:icon name="check-circle" class="mx-auto mb-2 size-8 text-green-500 opacity-60" />
-                            Nenhuma solicitação de adesão pendente no momento.
-                        </flux:table.cell>
-                    </flux:table.row>
-                @endforelse
-            </flux:table.rows>
-        </flux:table>
-
-        @if ($membrosPendentes->hasPages())
-            <div class="px-4 py-3 border-t border-zinc-200 dark:border-zinc-700">
-                {{ $membrosPendentes->links() }}
+                {{-- Botão de Ação --}}
+                <div class="pt-2">
+                    <flux:button 
+                        wire:click="aprovarMembro({{ $membro->idt_membro }})" 
+                        size="sm" 
+                        variant="primary" 
+                        icon="check"
+                        wire:loading.attr="disabled"
+                        class="w-full"
+                    >
+                        Aprovar Adesão
+                    </flux:button>
+                </div>
+            </flux:card>
+        @empty
+            <div class="col-span-full py-12 text-center text-zinc-400 bg-white border border-neutral-200 dark:border-neutral-700 dark:bg-zinc-900 rounded-xl shadow-xs">
+                <flux:icon name="check-circle" class="mx-auto mb-2 size-8 text-green-500 opacity-60" />
+                Nenhuma solicitação de adesão pendente no momento.
             </div>
-        @endif
-    </flux:card>
+        @endforelse
+    </div>
+
+    @if ($membrosPendentes->hasPages())
+        <div class="mt-6">
+            {{ $membrosPendentes->links() }}
+        </div>
+    @endif
 </div>

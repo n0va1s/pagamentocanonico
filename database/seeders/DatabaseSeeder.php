@@ -30,14 +30,28 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        // Create admin@email.com Admin
-        User::firstOrCreate(
-            ['email' => 'admin@email.com'],
+        // Create Member for jp.trabalho@gmail.com
+        $membroAdmin = \App\Models\Membro::updateOrCreate(
+            ['eml_membro' => 'jp.trabalho@gmail.com'],
             [
-                'name' => 'João Paulo Trabalho',
+                'nom_membro' => 'João Paulo Novais',
+                'tel_membro' => '61981546988',
+                'end_logradouro' => 'Rua Jerivá 113 B',
+                'tip_associado' => \App\Enums\Perfil::ADMIN,
+                'idt_associacao' => $assocAlfa->idt_associacao,
+                'ind_aprovado' => true,
+            ]
+        );
+
+        // Create jp.trabalho@gmail.com Admin
+        User::firstOrCreate(
+            ['email' => 'jp.trabalho@gmail.com'],
+            [
+                'name' => 'João Paulo Novais',
                 'password' => \Illuminate\Support\Facades\Hash::make('localhost@1'),
                 'role' => \App\Enums\Perfil::ADMIN,
                 'email_verified_at' => now(),
+                'idt_membro' => $membroAdmin->idt_membro,
             ]
         );
 
@@ -159,10 +173,10 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        $this->call([
+        /*$this->call([
             MembroSeeder::class,
             OfxSeeder::class,
             ResumoSeeder::class,
-        ]);
+        ]);*/
     }
 }

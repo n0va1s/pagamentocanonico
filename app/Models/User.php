@@ -123,14 +123,36 @@ class User extends Authenticatable
                     $user->idt_membro = $existingMembro->idt_membro;
                     $user->role = $existingMembro->tip_associado;
                 } else {
+                    $rawNumero = request('end_numero');
+                    $rawComplemento = request('end_complemento');
+                    $numero = $rawNumero;
+                    $complemento = $rawComplemento;
+
+                    if ($rawNumero !== null && $rawNumero !== '') {
+                        $digits = preg_replace('/[^0-9]/', '', $rawNumero);
+                        $numero = $digits !== '' ? $digits : null;
+
+                        $letters = trim(preg_replace('/[^a-zA-Z]/', '', $rawNumero));
+                        if ($letters !== '') {
+                            $loteSuffix = 'Lote ' . strtoupper($letters);
+                            if ($complemento !== null && $complemento !== '') {
+                                if (strpos($complemento, $loteSuffix) === false) {
+                                    $complemento .= ' ' . $loteSuffix;
+                                }
+                            } else {
+                                $complemento = $loteSuffix;
+                            }
+                        }
+                    }
+
                     $membro = Membro::create([
                         'nom_membro' => $user->name,
                         'eml_membro' => $user->email,
                         'tip_associado' => $user->role ?? Perfil::MEMBRO,
                         'idt_associacao' => request('idt_associacao') ?? Associacao::first()?->idt_associacao ?? Associacao::factory()->create()->idt_associacao,
                         'end_logradouro' => request('end_logradouro'),
-                        'end_numero' => request('end_numero'),
-                        'end_complemento' => request('end_complemento'),
+                        'end_numero' => $numero,
+                        'end_complemento' => $complemento,
                         'nom_apelido' => request('nom_apelido'),
                         'tel_membro' => request('tel_membro'),
                         'ind_aprovado' => false,

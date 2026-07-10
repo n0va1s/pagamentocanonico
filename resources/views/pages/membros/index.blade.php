@@ -14,6 +14,7 @@ new #[Title('Membros')] class extends Component {
 
     public string $busca        = '';
     public string $tip_associado = '';
+    public string $selectedAssociacaoId = '';
 
     public function updatedBusca(): void
     {
@@ -25,12 +26,17 @@ new #[Title('Membros')] class extends Component {
         $this->resetPage();
     }
 
+    public function updatedSelectedAssociacaoId(): void
+    {
+        $this->resetPage();
+    }
+
     public function excluir(int $id): void
     {
         $membro = Membro::findOrFail($id);
         $membro->delete();
 
-        $this->dispatch('toast', message: 'Membro removido com sucesso!', variant: 'success');
+        \Flux::toast(variant: 'success', text: __('messages.alerts.success.deleted'));
     }
 
     public function with(): array
@@ -39,12 +45,16 @@ new #[Title('Membros')] class extends Component {
 
         $membros = Membro::query()
             ->when($this->busca, fn ($q) =>
-                $q->where('nom_membro', 'like', "%{$this->busca}%")
-                  ->orWhere('eml_membro', 'like', "%{$this->busca}%")
+                $q->where(fn($sub) => $sub->where('nom_membro', 'like', "%{$this->busca}%")
+                  ->orWhere('eml_membro', 'like', "%{$this->busca}%"))
             )
             ->when($this->tip_associado, fn ($q) =>
                 $q->where('tip_associado', $this->tip_associado)
             )
+            ->when(auth()->user()->isAdmin() && $this->selectedAssociacaoId, fn ($q) =>
+                $q->where('idt_associacao', $this->selectedAssociacaoId)
+            )
+            ->with('associacao')
             ->orderBy('nom_membro')
             ->paginate(15);
 
@@ -62,6 +72,7 @@ new #[Title('Membros')] class extends Component {
         return [
             'membros'        => $membros,
             'tiposAssociado' => Perfil::cases(),
+            'associacoes'    => auth()->user()->isAdmin() ? \App\Models\Associacao::orderBy('nom_associacao')->get() : collect(),
         ];
     }
 }; ?>
@@ -96,6 +107,18 @@ new #[Title('Membros')] class extends Component {
                  aria-label="Buscar membros"
             />
         </div>
+        @if(auth()->user()->isAdmin())
+            <div class="sm:w-60">
+                <flux:select wire:model.live="selectedAssociacaoId" aria-label="Associação">
+                    <flux:select.option value="">Todas as Associações</flux:select.option>
+                    @foreach ($associacoes as $assoc)
+                        <flux:select.option value="{{ $assoc->idt_associacao }}">
+                            {{ $assoc->nom_associacao }}
+                        </flux:select.option>
+                    @endforeach
+                </flux:select>
+            </div>
+        @endif
         <div class="sm:w-52">
             <flux:select wire:model.live="tip_associado" aria-label="Tipo de associado">
                 <flux:select.option value="">Todos os tipos</flux:select.option>
@@ -108,91 +131,119 @@ new #[Title('Membros')] class extends Component {
         </div>
     </flux:card>
 
-    {{-- Tabela --}}
-    <flux:card class="overflow-x-auto p-0">
-        <flux:table>
-            <flux:table.columns>
-                <flux:table.column>Membro</flux:table.column>
-                <flux:table.column class="hidden md:table-cell">Contato</flux:table.column>
-                <flux:table.column class="hidden sm:table-cell">Tipo</flux:table.column>
-                <flux:table.column>Status OFX</flux:table.column>
-                <flux:table.column class="text-right">Ações</flux:table.column>
-            </flux:table.columns>
-
-            <flux:table.rows>
-                @forelse ($membros as $membro)
-                    <flux:table.row wire:key="{{ $membro->idt_membro }}">
-
-                        <flux:table.cell class="font-medium">
-                            <p class="font-semibold text-neutral-800 dark:text-neutral-200">{{ $membro->nom_membro }}</p>
-                            <p class="text-xs text-neutral-500 dark:text-neutral-400">{{ Str::limit($membro->end_logradouro, 35) }}</p>
-                        </flux:table.cell>
-
-                        <flux:table.cell class="text-xs text-neutral-600 dark:text-neutral-400 hidden md:table-cell">
-                            <div class="space-y-0.5">
-                                @if($membro->eml_membro)<div><i class="fa-solid fa-envelope mr-1 w-4 text-neutral-400"></i>{{ $membro->eml_membro }}</div>@endif
-                                @if($membro->tel_membro)<div><i class="fa-brands fa-whatsapp mr-1 w-4 text-green-500"></i>{{ $membro->tel_membro }}</div>@endif
-                                @if($membro->des_telegram_chat_id)<div><i class="fa-brands fa-telegram mr-1 w-4 text-sky-500"></i>{{ $membro->des_telegram_chat_id }}</div>@endif
+    {{-- Lista/Cards --}}
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        @forelse ($membros as $membro)
+            <flux:card class="flex flex-col justify-between p-5 space-y-4" wire:key="membro-{{ $membro->idt_membro }}">
+                <div class="space-y-3">
+                    {{-- Cabeçalho: Iniciais + Nome e Endereço --}}
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="flex items-center gap-3">
+                            <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                                {{ strtoupper(substr($membro->nom_membro, 0, 1)) }}
                             </div>
-                        </flux:table.cell>
-
-                        <flux:table.cell class="hidden sm:table-cell">
+                            <div class="overflow-hidden">
+                                <h3 class="font-bold text-base text-neutral-800 dark:text-neutral-200 truncate" title="{{ $membro->nom_membro }}">
+                                    {{ $membro->nom_membro }}
+                                </h3>
+                                <p class="text-xs text-neutral-500 dark:text-neutral-400 truncate" title="{{ $membro->end_logradouro }}">
+                                    {{ $membro->end_logradouro ?: 'Sem endereço cadastrado' }}
+                                </p>
+                            </div>
+                        </div>
+                        <div class="flex-shrink-0">
                             <flux:badge size="sm" class="uppercase">
                                 {{ $membro->tip_associado->label() }}
                             </flux:badge>
-                        </flux:table.cell>
+                        </div>
+                    </div>
 
-                        <flux:table.cell>
-                            @if($membro->overdue)
-                                <span class="text-xs font-bold text-red-600 flex items-center gap-1.5">
-                                    <span class="inline-block h-2 w-2 rounded-full bg-red-600"></span>
-                                    Inadimplente
+                    {{-- Detalhes/Metadata --}}
+                    <div class="pt-2 border-t border-neutral-100 dark:border-neutral-800/60 space-y-2 text-xs">
+                        {{-- Chave OFX status --}}
+                        <div class="flex justify-between items-center">
+                            <span class="text-neutral-400 dark:text-neutral-500">Chave OFX:</span>
+                            @if(empty($membro->nom_ofx))
+                                <span class="text-xs font-bold text-red-600 flex items-center gap-1.5 bg-red-50 dark:bg-red-950/20 px-2 py-0.5 rounded-sm">
+                                    <span class="inline-block h-1.5 w-1.5 rounded-full bg-red-600"></span>
+                                    Não informada
                                 </span>
                             @else
-                                <span class="text-xs font-bold text-green-600 flex items-center gap-1.5">
-                                    <span class="inline-block h-2 w-2 rounded-full bg-green-600"></span>
-                                    Regular
+                                <span class="text-xs font-bold text-green-600 flex items-center gap-1.5 bg-green-50 dark:bg-green-950/20 px-2 py-0.5 rounded-sm">
+                                    <span class="inline-block h-1.5 w-1.5 rounded-full bg-green-600"></span>
+                                    Informada
                                 </span>
                             @endif
-                        </flux:table.cell>
+                        </div>
 
-                        <flux:table.cell class="text-right">
-                            <div class="flex justify-end gap-1">
-                                <flux:button
-                                    size="sm"
-                                    variant="ghost"
-                                    icon="pencil"
-                                    :href="route('membros.edit', $membro)"
-                                    wire:navigate
-                                    aria-label="Editar membro"
-                                />
-                                <flux:button
-                                    size="sm"
-                                    variant="ghost"
-                                    icon="trash"
-                                    wire:click="excluir({{ $membro->idt_membro }})"
-                                    wire:confirm="Tem certeza que deseja remover {{ $membro->nom_membro }}?"
-                                    aria-label="Remover membro"
-                                />
+                        @if(auth()->user()->isAdmin())
+                            <div class="flex justify-between items-center gap-2">
+                                <span class="text-neutral-400 dark:text-neutral-500">Associação:</span>
+                                <span class="font-medium text-neutral-700 dark:text-neutral-300 truncate max-w-[180px]">
+                                    {{ $membro->associacao?->nom_associacao ?? 'Sem Associação' }}
+                                </span>
                             </div>
-                        </flux:table.cell>
+                        @endif
 
-                    </flux:table.row>
-                @empty
-                    <flux:table.row>
-                        <flux:table.cell colspan="5" class="py-12 text-center text-zinc-400">
-                            Nenhum membro encontrado.
-                        </flux:table.cell>
-                    </flux:table.row>
-                @endforelse
-            </flux:table.rows>
-        </flux:table>
+                        {{-- Contatos --}}
+                        <div class="space-y-1.5 pt-1 text-neutral-600 dark:text-neutral-400">
+                            @if($membro->eml_membro)
+                                <div class="flex items-center gap-2 truncate">
+                                    <flux:icon name="envelope" class="size-3.5 text-neutral-400 flex-shrink-0" />
+                                    <span class="truncate" title="{{ $membro->eml_membro }}">{{ $membro->eml_membro }}</span>
+                                </div>
+                            @endif
+                            @if($membro->tel_membro)
+                                <div class="flex items-center gap-2">
+                                    <flux:icon name="phone" class="size-3.5 text-neutral-400 flex-shrink-0" />
+                                    <span>{{ $membro->tel_membro }}</span>
+                                </div>
+                            @endif
+                            @if($membro->des_telegram_chat_id)
+                                <div class="flex items-center gap-2">
+                                    <flux:icon name="paper-airplane" class="size-3.5 text-neutral-400 flex-shrink-0" />
+                                    <span>{{ $membro->des_telegram_chat_id }}</span>
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+                </div>
 
-        @if ($membros->hasPages())
-            <div class="px-4 py-3 border-t border-zinc-200 dark:border-zinc-700">
-                {{ $membros->links() }}
+                {{-- Ações --}}
+                <div class="flex gap-2 pt-2 border-t border-neutral-100 dark:border-neutral-800/60">
+                    <flux:button
+                        size="sm"
+                        variant="primary"
+                        icon="pencil"
+                        :href="route('membros.edit', $membro)"
+                        wire:navigate
+                        class="flex-1"
+                    >
+                        Editar
+                    </flux:button>
+                    <flux:button
+                        size="sm"
+                        variant="ghost"
+                        icon="trash"
+                        wire:click="excluir({{ $membro->idt_membro }})"
+                        wire:confirm="Tem certeza que deseja remover {{ $membro->nom_membro }}?"
+                        class="text-red-500 hover:text-red-700"
+                    >
+                        Remover
+                    </flux:button>
+                </div>
+            </flux:card>
+        @empty
+            <div class="col-span-full py-12 text-center text-zinc-400 bg-white border border-neutral-200 dark:border-neutral-700 dark:bg-zinc-900 rounded-xl shadow-xs">
+                Nenhum membro encontrado.
             </div>
-        @endif
-    </flux:card>
+        @endforelse
+    </div>
+
+    @if ($membros->hasPages())
+        <div class="mt-6">
+            {{ $membros->links() }}
+        </div>
+    @endif
 
 </div>
