@@ -47,6 +47,14 @@ new class extends Component {
             $this->idt_associacao        = auth()->user()->membro?->idt_associacao;
             $this->tip_associado         = Perfil::MEMBRO->value;
         }
+
+        // Auto-select association if it is empty and only 1 association exists
+        if (empty($this->idt_associacao)) {
+            $firstAssoc = \App\Models\Associacao::first();
+            if ($firstAssoc && \App\Models\Associacao::count() === 1) {
+                $this->idt_associacao = $firstAssoc->idt_associacao;
+            }
+        }
     }
 
     protected function regras(): array

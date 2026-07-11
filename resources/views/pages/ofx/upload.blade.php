@@ -25,6 +25,14 @@ new class extends Component {
         if (!auth()->user()->isAdmin()) {
             $this->idt_associacao = auth()->user()->membro?->idt_associacao;
         }
+
+        // If the association is still null, and there is exactly one association in the database, auto-select it.
+        if (empty($this->idt_associacao)) {
+            $firstAssoc = Associacao::first();
+            if ($firstAssoc && Associacao::count() === 1) {
+                $this->idt_associacao = $firstAssoc->idt_associacao;
+            }
+        }
     }
 
     public function updatedIdtAssociacao()
@@ -46,6 +54,14 @@ new class extends Component {
             'idt_associacao' => 'required|exists:associacoes,idt_associacao',
             'ofx_files' => 'required|array|min:1',
             'ofx_files.*' => 'file|max:5120', // 5MB
+        ], [
+            'idt_associacao.required' => 'A associação é obrigatória.',
+            'idt_associacao.exists' => 'A associação selecionada é inválida.',
+            'ofx_files.required' => 'Selecione pelo menos um arquivo OFX.',
+            'ofx_files.array' => 'O formato de arquivos é inválido.',
+            'ofx_files.min' => 'Selecione pelo menos um arquivo OFX.',
+            'ofx_files.*.file' => 'O arquivo enviado é inválido.',
+            'ofx_files.*.max' => 'Cada arquivo OFX deve ter no máximo 5MB.',
         ]);
 
         $this->transacoes = [];
@@ -139,6 +155,9 @@ new class extends Component {
     {
         $this->validate([
             'idt_associacao' => 'required|exists:associacoes,idt_associacao',
+        ], [
+            'idt_associacao.required' => 'A associação é obrigatória.',
+            'idt_associacao.exists' => 'A associação selecionada é inválida.',
         ]);
 
         if (!$this->processado || empty($this->tempPaths)) {
