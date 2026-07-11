@@ -176,13 +176,13 @@ new #[Title('Profile settings')] class extends Component {
                 {{-- CPF & Nome --}}
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <flux:input wire:model="num_cpf_membro" label="CPF" type="text" disabled />
-                    <flux:input wire:model="name" :label="__('Name')" type="text" required autofocus autocomplete="name" />
+                    <flux:input wire:model="name" :label="__('Nome')" type="text" required autofocus autocomplete="name" />
                 </div>
 
                 {{-- Apelido & Endereço --}}
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <flux:input wire:model="nom_apelido" label="Apelido" type="text" placeholder="Seu apelido" />
-                    <flux:input wire:model="end_logradouro" label="Endereço / Logradouro" type="text" placeholder="Rua, Avenida, etc." />
+                    <flux:input wire:model="end_logradouro" label="Endereço" type="text" placeholder="Rua, Avenida, etc." />
                 </div>
 
                 {{-- Número & Complemento --}}
