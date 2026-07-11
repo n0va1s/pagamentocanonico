@@ -15,6 +15,7 @@ class MembroFactory extends Factory
         return [
             'idt_associacao' => \App\Models\Associacao::factory(),
             'nom_membro' => fake('pt_BR')->name(),
+            'num_cpf_membro' => fake('pt_BR')->unique()->cpf(),
             'ind_aprovado' => true,
             'eml_membro' => fake()->unique()->safeEmail(),
             'tel_membro' => fake('pt_BR')->optional()->phoneNumber(),

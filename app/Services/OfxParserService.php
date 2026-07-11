@@ -115,6 +115,7 @@ class OfxParserService
                 'des_transacao' => $this->limparDescricao($bloco['MEMO'] ?? null),
                 'num_check' => $bloco['CHECKNUM'] ?? null,
                 'nom_pessoa' => $bloco['NAME'] ?? null,
+                'num_cpf_pagador' => $this->extrairCpfDoMemo($bloco['MEMO'] ?? null),
             ]);
 
             $valorTotal += $valor;
@@ -157,6 +158,7 @@ class OfxParserService
                         'val_total' => $total,
                         'num_transacao' => $itens->count(),
                         'ind_pago' => $total > 0,
+                        'num_cpf_pagador' => $itens->first()->num_cpf_pagador,
                     ]
                 );
             }
@@ -252,5 +254,27 @@ class OfxParserService
         $descricao = preg_replace('/\bDOC\s*-\s*\d+\b/i', '', $descricao);
 
         return trim($descricao) ?: 'Não identificado';
+    }
+
+    /**
+     * Extrai o CPF/CNPJ (apenas dígitos) do campo MEMO.
+     */
+    public function extrairCpfDoMemo(?string $memo): ?string
+    {
+        if (empty($memo)) {
+            return null;
+        }
+
+        $memo = preg_replace('/\s+/', ' ', trim($memo));
+
+        // Limpa data e hora iniciais do MEMO (ex: "18/03 18:53 " ou "18/03 ")
+        $memoSemData = preg_replace('/^\d{2}\/\d{2}(?:\s+\d{2}:\d{2})?\s+/', '', $memo);
+
+        // O CPF/CNPJ deve ser o próximo bloco de caracteres (11 a 18 chars com pontuação)
+        if (preg_match('/^((?:\d|[\.\-\/]){11,18})/', $memoSemData, $matches)) {
+            return preg_replace('/\D/', '', $matches[1]);
+        }
+
+        return null;
     }
 }

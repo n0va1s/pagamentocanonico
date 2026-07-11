@@ -26,6 +26,7 @@ class Transacao extends Model
         'des_transacao',
         'num_check',
         'nom_pessoa',
+        'num_cpf_pagador',
     ];
 
     protected $casts = [

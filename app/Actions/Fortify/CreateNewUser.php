@@ -19,13 +19,35 @@ class CreateNewUser implements CreatesNewUsers
      */
     public function create(array $input): User
     {
+        if (isset($input['num_cpf_membro'])) {
+            $input['num_cpf_membro'] = \App\Services\CpfService::format($input['num_cpf_membro']);
+        }
+        if (isset($input['tel_membro'])) {
+            $input['tel_membro'] = \App\Services\PhoneService::format($input['tel_membro']);
+        }
+
+        // Merge formatted values back to request helper so User model booted hook gets formatted values
+        request()->merge([
+            'num_cpf_membro' => $input['num_cpf_membro'] ?? null,
+            'tel_membro' => $input['tel_membro'] ?? null,
+            'nom_apelido' => $input['nom_apelido'] ?? null,
+            'end_logradouro' => $input['end_logradouro'] ?? null,
+            'end_numero' => $input['end_numero'] ?? null,
+            'end_complemento' => $input['end_complemento'] ?? null,
+            'idt_associacao' => $input['idt_associacao'] ?? null,
+        ]);
+
         Validator::make($input, [
             ...$this->profileRules(),
             'password' => $this->passwordRules(),
             'idt_associacao' => ['required', 'exists:associacoes,idt_associacao'],
+            'num_cpf_membro' => ['required', 'string', 'max:14', new \App\Rules\Cpf, \Illuminate\Validation\Rule::unique('membros', 'num_cpf_membro')],
+            'tel_membro' => ['nullable', 'string', 'max:20', new \App\Rules\Telefone],
         ], [
             'idt_associacao.required' => 'A associação é obrigatória.',
             'idt_associacao.exists' => 'A associação selecionada é inválida.',
+            'num_cpf_membro.required' => 'O CPF é obrigatório.',
+            'num_cpf_membro.unique' => 'Este CPF já está cadastrado.',
         ])->validate();
 
         return User::create([

@@ -18,10 +18,12 @@ return new class extends Migration
             $table->decimal('val_total', 15, 2)->default(0);
             $table->integer('num_transacao')->default(0);
             $table->boolean('ind_pago')->default(false);
+            $table->string('num_cpf_pagador', 14)->nullable();
             $table->timestamps();
 
             $table->unique(['idt_ofx', 'nom_pessoa', 'num_ano', 'num_mes']);
             $table->index(['idt_ofx', 'nom_pessoa']);
+            $table->index('num_cpf_pagador');
         });
     }
 

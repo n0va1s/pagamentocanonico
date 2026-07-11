@@ -19,7 +19,7 @@ class Membro extends Model
     protected $fillable = [
         'idt_associacao',
         'nom_membro',
-        'nom_ofx',
+        'num_cpf_membro',
         'nom_apelido',
         'eml_membro',
         'tel_membro',
@@ -33,14 +33,6 @@ class Membro extends Model
         'des_telegram_chat_id',
     ];
 
-    /**
-     * Retorna o nome usado para matching com o campo nom_pessoa do OFX.
-     * Prioriza nom_ofx quando preenchido, com fallback para nom_membro.
-     */
-    public function nomeParaMatchingOfx(): string
-    {
-        return $this->nom_ofx ?? $this->nom_membro;
-    }
 
     public function associacao()
     {

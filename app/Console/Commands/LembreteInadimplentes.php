@@ -32,10 +32,17 @@ class LembreteInadimplentes extends Command
         $enviados = 0;
 
         foreach ($resumosPendentes as $resumo) {
-            // Encontra o membro pelo nome de matching
-            $membro = Membro::where('nom_ofx', $resumo->nom_pessoa)
-                ->orWhere('nom_membro', $resumo->nom_pessoa)
-                ->first();
+            $membro = null;
+            if (!empty($resumo->num_cpf_pagador)) {
+                $cleanCpf = preg_replace('/\D/', '', $resumo->num_cpf_pagador);
+                $membro = Membro::whereRaw("REPLACE(REPLACE(num_cpf_membro, '.', ''), '-', '') = ?", [$cleanCpf])->first();
+                if (!$membro && strlen($cleanCpf) === 14 && str_starts_with($cleanCpf, '000')) {
+                    $membro = Membro::whereRaw("REPLACE(REPLACE(num_cpf_membro, '.', ''), '-', '') = ?", [substr($cleanCpf, 3)])->first();
+                }
+            }
+            if (!$membro) {
+                $membro = Membro::where('nom_membro', $resumo->nom_pessoa)->first();
+            }
 
             if ($membro && $membro->eml_membro) {
                 try {

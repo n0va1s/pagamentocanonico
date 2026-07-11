@@ -35,6 +35,7 @@ class DatabaseSeeder extends Seeder
             ['eml_membro' => 'jp.trabalho@gmail.com'],
             [
                 'nom_membro' => 'João Paulo Novais',
+                'num_cpf_membro' => fake('pt_BR')->unique()->cpf(),
                 'tel_membro' => '61981546988',
                 'end_logradouro' => 'Rua Jerivá 113 B',
                 'tip_associado' => \App\Enums\Perfil::ADMIN,
@@ -60,6 +61,7 @@ class DatabaseSeeder extends Seeder
             ['eml_membro' => 'diretor@email.com'],
             [
                 'nom_membro' => 'Diretor User',
+                'num_cpf_membro' => fake('pt_BR')->unique()->cpf(),
                 'tel_membro' => '61999999999',
                 'dat_nascimento' => '1980-08-20',
                 'tip_associado' => \App\Enums\Perfil::DIRETOR,
@@ -85,6 +87,7 @@ class DatabaseSeeder extends Seeder
             ['eml_membro' => 'membro@email.com'],
             [
                 'nom_membro' => 'João Paulo Silva',
+                'num_cpf_membro' => fake('pt_BR')->unique()->cpf(),
                 'tel_membro' => '61987654321',
                 'dat_nascimento' => '1985-04-12',
                 'end_logradouro' => 'Rua das Flores',
@@ -116,6 +119,7 @@ class DatabaseSeeder extends Seeder
             ['eml_membro' => 'pendente@email.com'],
             [
                 'nom_membro' => 'Maria Oliveira',
+                'num_cpf_membro' => fake('pt_BR')->unique()->cpf(),
                 'tel_membro' => '(11) 91234-5678',
                 'dat_nascimento' => now()->subYears(30)->format('Y-m-d'),
                 'end_logradouro' => 'Avenida Brasil',
@@ -147,6 +151,7 @@ class DatabaseSeeder extends Seeder
             ['eml_membro' => 'devedor@email.com'],
             [
                 'nom_membro' => 'Devedor da Silva',
+                'num_cpf_membro' => fake('pt_BR')->unique()->cpf(),
                 'tel_membro' => '(11) 98765-4321',
                 'dat_nascimento' => now()->subYears(25)->format('Y-m-d'),
                 'end_logradouro' => 'Rua do Atraso',

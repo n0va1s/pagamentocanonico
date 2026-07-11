@@ -45,9 +45,12 @@ test('approved member with pending payments sees debtor status on dashboard', fu
 
     // Create an OFX import and an unpaid Resumo for this member
     $ofx = \App\Models\Ofx::factory()->create(['idt_associacao' => $membro->idt_associacao]);
+    $membro->associacao->update(['des_chave_pix' => '123.456.789-00']);
+    $user->refresh();
     \App\Models\Resumo::factory()->create([
         'idt_ofx' => $ofx->idt_ofx,
-        'nom_pessoa' => $membro->nomeParaMatchingOfx(),
+        'nom_pessoa' => $membro->nom_membro,
+        'num_cpf_pagador' => $membro->num_cpf_membro,
         'ind_pago' => false,
         'val_total' => 150.00,
     ]);
@@ -57,6 +60,6 @@ test('approved member with pending payments sees debtor status on dashboard', fu
     $response = $this->get(route('dashboard'));
     $response->assertOk();
     $response->assertSee('Pendente de pagamento');
-    $response->assertSee('Contribuições pendentes');
+    $response->assertSee('Realize o pagamento');
     $response->assertSee('R$ 150,00');
 });

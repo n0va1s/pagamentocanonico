@@ -62,8 +62,21 @@ new #[Title('Membros')] class extends Component {
             $m->overdue = false;
             if ($latestOfx) {
                 $m->overdue = Resumo::where('idt_ofx', $latestOfx->idt_ofx)
-                    ->where('nom_pessoa', $m->nomeParaMatchingOfx())
                     ->where('ind_pago', false)
+                    ->where(function($query) use ($m) {
+                        $query->where(function($q) use ($m) {
+                            if ($m->num_cpf_membro) {
+                                $cleanCpf = preg_replace('/\D/', '', $m->num_cpf_membro);
+                                $q->whereRaw("REPLACE(REPLACE(num_cpf_pagador, '.', ''), '-', '') = ?", [$cleanCpf]);
+                                if (strlen($cleanCpf) === 14 && str_starts_with($cleanCpf, '000')) {
+                                    $q->orWhereRaw("REPLACE(REPLACE(num_cpf_pagador, '.', ''), '-', '') = ?", [substr($cleanCpf, 3)]);
+                                }
+                            } else {
+                                $q->whereRaw("1 = 0");
+                            }
+                        })
+                        ->orWhere('nom_pessoa', $m->nom_membro);
+                    })
                     ->exists();
             }
             return $m;
@@ -162,18 +175,10 @@ new #[Title('Membros')] class extends Component {
                     <div class="pt-2 border-t border-neutral-100 dark:border-neutral-800/60 space-y-2 text-xs">
                         {{-- Chave OFX status --}}
                         <div class="flex justify-between items-center">
-                            <span class="text-neutral-400 dark:text-neutral-500">Chave OFX:</span>
-                            @if(empty($membro->nom_ofx))
-                                <span class="text-xs font-bold text-red-600 flex items-center gap-1.5 bg-red-50 dark:bg-red-950/20 px-2 py-0.5 rounded-sm">
-                                    <span class="inline-block h-1.5 w-1.5 rounded-full bg-red-600"></span>
-                                    Não informada
-                                </span>
-                            @else
-                                <span class="text-xs font-bold text-green-600 flex items-center gap-1.5 bg-green-50 dark:bg-green-950/20 px-2 py-0.5 rounded-sm">
-                                    <span class="inline-block h-1.5 w-1.5 rounded-full bg-green-600"></span>
-                                    Informada
-                                </span>
-                            @endif
+                            <span class="text-neutral-400 dark:text-neutral-500">CPF:</span>
+                            <span class="font-medium text-neutral-700 dark:text-neutral-300">
+                                {{ $membro->num_cpf_membro }}
+                            </span>
                         </div>
 
                         @if(auth()->user()->isAdmin())

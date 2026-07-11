@@ -26,6 +26,7 @@ class Resumo extends Model
         'val_total',
         'num_transacao',
         'ind_pago',
+        'num_cpf_pagador',
     ];
 
     protected $casts = [

@@ -21,6 +21,7 @@ test('new users can register', function () {
         'password' => 'password',
         'password_confirmation' => 'password',
         'idt_associacao' => $assoc->idt_associacao,
+        'num_cpf_membro' => fake('pt_BR')->unique()->cpf(),
     ]);
 
     $response->assertSessionHasNoErrors()

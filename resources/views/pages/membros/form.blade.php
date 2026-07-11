@@ -12,7 +12,7 @@ new class extends Component {
     // Dados pessoais
     public ?int $idt_associacao          = null;
     public string $nom_membro            = '';
-    public string $nom_ofx               = '';
+    public string $num_cpf_membro        = '';
     public string $nom_apelido           = '';
     public string $eml_membro            = '';
     public string $tel_membro            = '';
@@ -34,7 +34,7 @@ new class extends Component {
         if ($membro?->exists) {
             $this->idt_associacao        = $membro->idt_associacao;
             $this->nom_membro            = $membro->nom_membro;
-            $this->nom_ofx               = $membro->nom_ofx ?? '';
+            $this->num_cpf_membro        = $membro->num_cpf_membro ?? '';
             $this->nom_apelido           = $membro->nom_apelido ?? '';
             $this->eml_membro            = $membro->eml_membro;
             $this->tel_membro            = $membro->tel_membro ?? '';
@@ -56,15 +56,14 @@ new class extends Component {
         return [
             'idt_associacao'         => ['required', 'exists:associacoes,idt_associacao'],
             'nom_membro'             => ['required', 'string', 'max:255'],
-            'nom_ofx'                => ['nullable', 'string', 'max:255'],
+            'num_cpf_membro'         => ['required', 'string', 'max:14', new \App\Rules\Cpf, Rule::unique('membros', 'num_cpf_membro')->ignore($ignorarId, 'idt_membro')],
             'nom_apelido'            => ['nullable', 'string', 'max:100'],
             'eml_membro'             => ['required', 'email', 'max:255', Rule::unique('membros', 'eml_membro')->ignore($ignorarId, 'idt_membro')],
-            'tel_membro'             => ['nullable', 'string', 'max:20'],
+            'tel_membro'             => ['nullable', 'string', 'max:20', new \App\Rules\Telefone],
             'end_logradouro'         => ['nullable', 'string', 'max:150'],
             'end_numero'             => ['nullable', 'string', 'max:20'],
             'end_complemento'        => ['nullable', 'string', 'max:150'],
             'tip_associado'          => ['required', Rule::enum(Perfil::class)],
-
         ];
     }
 
@@ -74,6 +73,9 @@ new class extends Component {
             'idt_associacao.required' => 'A associação é obrigatória.',
             'idt_associacao.exists'   => 'A associação selecionada é inválida.',
             'nom_membro.required'    => 'O nome do membro é obrigatório.',
+            'num_cpf_membro.required' => 'O CPF do membro é obrigatório.',
+            'num_cpf_membro.unique'   => 'Este CPF já está cadastrado.',
+            'num_cpf_membro.max'      => 'O CPF não pode ultrapassar 14 caracteres.',
             'eml_membro.required'    => 'O e-mail é obrigatório.',
             'eml_membro.email'       => 'Informe um e-mail válido.',
             'eml_membro.unique'      => 'Este e-mail já está cadastrado.',
@@ -87,6 +89,9 @@ new class extends Component {
         if (!auth()->user()->isAdmin()) {
             $this->idt_associacao = auth()->user()->membro?->idt_associacao;
         }
+
+        $this->num_cpf_membro = \App\Services\CpfService::format($this->num_cpf_membro) ?? '';
+        $this->tel_membro = \App\Services\PhoneService::format($this->tel_membro) ?? '';
 
         $dados = $this->validate($this->regras(), $this->mensagens());
 
@@ -150,18 +155,14 @@ new class extends Component {
                 </flux:field>
 
                 <flux:field class="md:col-span-2">
-                    <flux:label for="nom_ofx">Nome no extrato bancário</flux:label>
+                    <flux:label required for="num_cpf_membro">CPF do membro</flux:label>
                     <flux:input
-                        id="nom_ofx"
-                        wire:model="nom_ofx"
-                        placeholder="Ex: JOAO PAULO SILVA"
+                        id="num_cpf_membro"
+                        wire:model="num_cpf_membro"
+                        placeholder="Ex: 000.000.000-00"
                         autocomplete="off"
                     />
-                    <flux:description>
-                        Preencha somente se o nome no extrato OFX for diferente do nome cadastrado acima.
-                        Usado para identificar pagamentos automaticamente.
-                    </flux:description>
-                    <flux:error name="nom_ofx" />
+                    <flux:error name="num_cpf_membro" />
                 </flux:field>
 
                 <flux:field>

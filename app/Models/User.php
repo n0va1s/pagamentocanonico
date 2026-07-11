@@ -147,6 +147,7 @@ class User extends Authenticatable
 
                     $membro = Membro::create([
                         'nom_membro' => $user->name,
+                        'num_cpf_membro' => request('num_cpf_membro') ?? fake('pt_BR')->unique()->cpf(),
                         'eml_membro' => $user->email,
                         'tip_associado' => $user->role ?? Perfil::MEMBRO,
                         'idt_associacao' => request('idt_associacao') ?? Associacao::first()?->idt_associacao ?? Associacao::factory()->create()->idt_associacao,

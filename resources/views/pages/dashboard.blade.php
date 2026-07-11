@@ -156,8 +156,24 @@ new #[Title('Dashboard')] class extends Component {
             $resumosPendentes = collect();
             $resumosRegularizados = collect();
             if ($membro) {
-                $nomeMatching = $membro->nomeParaMatchingOfx();
-                $todosResumos = Resumo::where('nom_pessoa', $nomeMatching)->orderByDesc('num_ano')->orderByDesc('num_mes')->get();
+                $todosResumos = Resumo::where(function ($query) use ($membro) {
+                    $query->where(function($q) use ($membro) {
+                        if ($membro->num_cpf_membro) {
+                            $cleanCpf = preg_replace('/\D/', '', $membro->num_cpf_membro);
+                            $q->whereRaw("REPLACE(REPLACE(num_cpf_pagador, '.', ''), '-', '') = ?", [$cleanCpf]);
+                            if (strlen($cleanCpf) === 14 && str_starts_with($cleanCpf, '000')) {
+                                $q->orWhereRaw("REPLACE(REPLACE(num_cpf_pagador, '.', ''), '-', '') = ?", [substr($cleanCpf, 3)]);
+                            }
+                        } else {
+                            $q->whereRaw("1 = 0");
+                        }
+                    })
+                    ->orWhere('nom_pessoa', $membro->nom_membro);
+                })
+                ->orderByDesc('num_ano')
+                ->orderByDesc('num_mes')
+                ->get();
+
                 $resumosPendentes = $todosResumos->where('ind_pago', false);
                 $resumosRegularizados = $todosResumos->where('ind_pago', true);
             }
@@ -208,11 +224,30 @@ new #[Title('Dashboard')] class extends Component {
                     $q->withoutGlobalScope('associacao')->where('idt_associacao', $this->selectedAssociacaoId);
                 });
             }
-            $nomesInadimplentes = $inadimplentesQuery->pluck('nom_pessoa')->unique()->toArray();
+            $resumosInadimplentes = $inadimplentesQuery->get();
 
             foreach ($membros as $m) {
-                $nomeMatching = $m->nomeParaMatchingOfx();
-                if (in_array($nomeMatching, $nomesInadimplentes)) {
+                $isDebtor = false;
+
+                if ($m->num_cpf_membro) {
+                    $cleanCpf = preg_replace('/\D/', '', $m->num_cpf_membro);
+                    $isDebtor = $resumosInadimplentes->contains(function ($r) use ($cleanCpf) {
+                        $rcpf = preg_replace('/\D/', '', $r->num_cpf_pagador ?? '');
+                        if ($rcpf === $cleanCpf) {
+                            return true;
+                        }
+                        if (strlen($rcpf) === 14 && str_starts_with($rcpf, '000') && substr($rcpf, 3) === $cleanCpf) {
+                            return true;
+                        }
+                        return false;
+                    });
+                }
+
+                if (!$isDebtor) {
+                    $isDebtor = $resumosInadimplentes->contains('nom_pessoa', $m->nom_membro);
+                }
+
+                if ($isDebtor) {
                     $totalInadimplentes++;
                     $valorRecuperar += $m->associacao?->val_taxa ?? 0;
                 } else {
@@ -262,10 +297,26 @@ new #[Title('Dashboard')] class extends Component {
             $porPessoa = $resumos->groupBy('nom_pessoa');
 
             foreach ($porPessoa as $nomePessoa => $resumosPessoa) {
-                $membro = Membro::with('associacao')
-                    ->where('nom_ofx', $nomePessoa)
-                    ->orWhere('nom_membro', $nomePessoa)
-                    ->first();
+                $cpf = $resumosPessoa->first()->num_cpf_pagador;
+                $membro = null;
+
+                if (!empty($cpf)) {
+                    $cleanCpf = preg_replace('/\D/', '', $cpf);
+                    $membro = Membro::with('associacao')
+                        ->whereRaw("REPLACE(REPLACE(num_cpf_membro, '.', ''), '-', '') = ?", [$cleanCpf])
+                        ->first();
+                    if (!$membro && strlen($cleanCpf) === 14 && str_starts_with($cleanCpf, '000')) {
+                        $membro = Membro::with('associacao')
+                            ->whereRaw("REPLACE(REPLACE(num_cpf_membro, '.', ''), '-', '') = ?", [substr($cleanCpf, 3)])
+                            ->first();
+                    }
+                }
+
+                if (!$membro) {
+                    $membro = Membro::with('associacao')
+                        ->where('nom_membro', $nomePessoa)
+                        ->first();
+                }
 
                 $linha = [
                     'nome' => $nomePessoa,

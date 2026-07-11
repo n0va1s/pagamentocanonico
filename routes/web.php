@@ -18,8 +18,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Volt::route('/mensagens/criar', 'mensagens.create')->name('mensagens.create');
         Volt::route('/mensagens/{mensagem}', 'mensagens.show')->name('mensagens.show');
 
-        Route::get('/upload', [OfxUploadController::class, 'show'])->name('upload');
-        Route::post('/upload', [OfxUploadController::class, 'store'])->name('upload.store');
+        Volt::route('/upload', 'pages.ofx.upload')->name('upload');
 
         Volt::route('/membros', 'pages.membros.index')->name('membros.index');
         Volt::route('/membros/novo', 'pages.membros.create')->name('membros.create');

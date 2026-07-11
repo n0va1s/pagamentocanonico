@@ -36,4 +36,9 @@ class Associacao extends Model
     {
         return $this->hasMany(Ofx::class, 'idt_associacao', 'idt_associacao');
     }
+
+    public function getChavePixAttribute(): ?string
+    {
+        return $this->des_chave_pix;
+    }
 }

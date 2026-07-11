@@ -15,6 +15,7 @@ new #[Title('Profile settings')] class extends Component {
     public string $email = '';
 
     // Membro properties
+    public string $num_cpf_membro = '';
     public string $nom_apelido = '';
     public string $tel_membro = '';
     public string $end_logradouro = '';
@@ -35,6 +36,7 @@ new #[Title('Profile settings')] class extends Component {
         $membro = $user->membro;
         if ($membro) {
             $this->hasMembro = true;
+            $this->num_cpf_membro = $membro->num_cpf_membro ?? '';
             $this->nom_apelido = $membro->nom_apelido ?? '';
             $this->tel_membro = $membro->tel_membro ?? '';
             $this->end_logradouro = $membro->end_logradouro ?? '';
@@ -156,77 +158,8 @@ new #[Title('Profile settings')] class extends Component {
 
     <x-pages::settings.layout :heading="__('Profile')" :subheading="__('Update your name and email address')">
         <form wire:submit="updateProfileInformation" class="my-6 w-full space-y-6">
-            <flux:input wire:model="name" :label="__('Name')" type="text" required autofocus autocomplete="name" />
-
             @if ($hasMembro)
-                <flux:input wire:model="nom_apelido" label="Apelido" type="text" placeholder="Seu apelido" />
-
-                <flux:input wire:model="tel_membro" label="Celular" type="text" mask="(99) 99999-9999" placeholder="(61) 98154-6988" />
-
-                <flux:input wire:model="end_logradouro" label="Endereço / Logradouro" type="text" placeholder="Rua, Avenida, etc." />
-
-                <div class="flex gap-4">
-                    <div class="flex-1">
-                        <flux:input
-                            id="end_numero"
-                            wire:model="end_numero"
-                            label="Número"
-                            type="text"
-                            placeholder="Nº"
-                            x-on:input="
-                                let val = $el.value;
-                                if (/[a-zA-Z]/.test(val)) {
-                                    let numbers = val.replace(/[^0-9]/g, '');
-                                    let letters = val.replace(/[^a-zA-Z]/g, '');
-                                    $el.value = numbers;
-                                    $wire.set('end_numero', numbers);
-                                    
-                                    let lotInfo = 'Lote ' + letters.toUpperCase();
-                                    let compVal = $wire.get('end_complemento') || '';
-                                    if (compVal.trim() === '') {
-                                        $wire.set('end_complemento', lotInfo);
-                                    } else if (!compVal.includes(lotInfo)) {
-                                        $wire.set('end_complemento', compVal.trim() + ' ' + lotInfo);
-                                    }
-                                } else {
-                                    let numbers = val.replace(/[^0-9]/g, '');
-                                    $el.value = numbers;
-                                    $wire.set('end_numero', numbers);
-                                }
-                            "
-                        />
-                    </div>
-
-                    <div class="flex-1">
-                        <flux:input
-                            id="end_complemento"
-                            wire:model="end_complemento"
-                            label="Complemento"
-                            type="text"
-                            placeholder="Apto, Bloco, etc."
-                        />
-                    </div>
-                </div>
-            @endif
-
-            <div>
-                <flux:input wire:model="email" :label="__('Email')" type="email" required autocomplete="email" />
-
-                @if ($this->hasUnverifiedEmail)
-                    <div>
-                        <flux:text class="mt-4">
-                            {{ __('Your email address is unverified.') }}
-
-                            <flux:link class="text-sm cursor-pointer" wire:click.prevent="resendVerificationNotification">
-                                {{ __('Click here to re-send the verification email.') }}
-                            </flux:link>
-                        </flux:text>
-
-                    </div>
-                @endif
-            </div>
-
-            @if ($hasMembro)
+                {{-- Associação --}}
                 <flux:select
                     id="idt_associacao"
                     wire:model="idt_associacao"
@@ -239,6 +172,95 @@ new #[Title('Profile settings')] class extends Component {
                         </flux:select.option>
                     @endforeach
                 </flux:select>
+
+                {{-- CPF & Nome --}}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <flux:input wire:model="num_cpf_membro" label="CPF" type="text" disabled />
+                    <flux:input wire:model="name" :label="__('Name')" type="text" required autofocus autocomplete="name" />
+                </div>
+
+                {{-- Apelido & Endereço --}}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <flux:input wire:model="nom_apelido" label="Apelido" type="text" placeholder="Seu apelido" />
+                    <flux:input wire:model="end_logradouro" label="Endereço / Logradouro" type="text" placeholder="Rua, Avenida, etc." />
+                </div>
+
+                {{-- Número & Complemento --}}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <flux:input
+                        id="end_numero"
+                        wire:model="end_numero"
+                        label="Número"
+                        type="text"
+                        placeholder="Nº"
+                        x-on:input="
+                            let val = $el.value;
+                            if (/[a-zA-Z]/.test(val)) {
+                                let numbers = val.replace(/[^0-9]/g, '');
+                                let letters = val.replace(/[^a-zA-Z]/g, '');
+                                $el.value = numbers;
+                                $wire.set('end_numero', numbers);
+                                
+                                let lotInfo = 'Lote ' + letters.toUpperCase();
+                                let compVal = $wire.get('end_complemento') || '';
+                                if (compVal.trim() === '') {
+                                    $wire.set('end_complemento', lotInfo);
+                                } else if (!compVal.includes(lotInfo)) {
+                                    $wire.set('end_complemento', compVal.trim() + ' ' + lotInfo);
+                                }
+                            } else {
+                                let numbers = val.replace(/[^0-9]/g, '');
+                                $el.value = numbers;
+                                $wire.set('end_numero', numbers);
+                            }
+                        "
+                    />
+                    <flux:input
+                        id="end_complemento"
+                        wire:model="end_complemento"
+                        label="Complemento"
+                        type="text"
+                        placeholder="Apto, Bloco, etc."
+                    />
+                </div>
+
+                {{-- Celular & Email --}}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <flux:input wire:model="tel_membro" label="Celular" type="text" mask="(99) 99999-9999" placeholder="(61) 98154-6988" />
+                    <div>
+                        <flux:input wire:model="email" :label="__('Email')" type="email" required autocomplete="email" />
+
+                        @if ($this->hasUnverifiedEmail)
+                            <div>
+                                <flux:text class="mt-4">
+                                    {{ __('Your email address is unverified.') }}
+
+                                    <flux:link class="text-sm cursor-pointer" wire:click.prevent="resendVerificationNotification">
+                                        {{ __('Click here to re-send the verification email.') }}
+                                    </flux:link>
+                                </flux:text>
+                            </div>
+                        @endif
+                    </div>
+                </div>
+            @else
+                {{-- Fallback Layout --}}
+                <flux:input wire:model="name" :label="__('Name')" type="text" required autofocus autocomplete="name" />
+                <div>
+                    <flux:input wire:model="email" :label="__('Email')" type="email" required autocomplete="email" />
+
+                    @if ($this->hasUnverifiedEmail)
+                        <div>
+                            <flux:text class="mt-4">
+                                {{ __('Your email address is unverified.') }}
+
+                                <flux:link class="text-sm cursor-pointer" wire:click.prevent="resendVerificationNotification">
+                                    {{ __('Click here to re-send the verification email.') }}
+                                </flux:link>
+                            </flux:text>
+                        </div>
+                    @endif
+                </div>
             @endif
 
             <div class="flex items-center gap-4">

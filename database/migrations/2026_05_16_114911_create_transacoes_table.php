@@ -18,10 +18,12 @@ return new class extends Migration
             $table->string('des_transacao')->nullable(); // MEMO (nome/descrição)
             $table->string('num_check')->nullable(); // CHECKNUM
             $table->string('nom_pessoa')->nullable(); // NAME (se disponível)
+            $table->string('num_cpf_pagador', 14)->nullable();
             $table->timestamps();
 
             $table->index(['idt_ofx', 'dat_transacao']);
             $table->index('des_transacao');
+            $table->index('num_cpf_pagador');
         });
     }
 
