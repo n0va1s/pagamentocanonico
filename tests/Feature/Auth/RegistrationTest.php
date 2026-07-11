@@ -1,5 +1,7 @@
 <?php
 
+use App\Enums\Perfil;
+use App\Models\Associacao;
 use Laravel\Fortify\Features;
 
 beforeEach(function () {
@@ -13,7 +15,7 @@ test('registration screen can be rendered', function () {
 });
 
 test('new users can register', function () {
-    $assoc = \App\Models\Associacao::factory()->create();
+    $assoc = Associacao::factory()->create();
 
     $response = $this->post(route('register.store'), [
         'name' => 'John Doe',
@@ -30,7 +32,7 @@ test('new users can register', function () {
     $this->assertAuthenticated();
     $this->assertDatabaseHas('users', [
         'email' => 'test@example.com',
-        'role' => \App\Enums\Perfil::MEMBRO->value,
+        'role' => Perfil::MEMBRO->value,
     ]);
 
     $this->assertDatabaseHas('membros', [

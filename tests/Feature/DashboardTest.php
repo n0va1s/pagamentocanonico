@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\Ofx;
+use App\Models\Resumo;
 use App\Models\User;
 
 test('guests are redirected to the login page', function () {
@@ -44,10 +46,10 @@ test('approved member with pending payments sees debtor status on dashboard', fu
     $membro->update(['ind_aprovado' => true]);
 
     // Create an OFX import and an unpaid Resumo for this member
-    $ofx = \App\Models\Ofx::factory()->create(['idt_associacao' => $membro->idt_associacao]);
+    $ofx = Ofx::factory()->create(['idt_associacao' => $membro->idt_associacao]);
     $membro->associacao->update(['des_chave_pix' => '123.456.789-00']);
     $user->refresh();
-    \App\Models\Resumo::factory()->create([
+    Resumo::factory()->create([
         'idt_ofx' => $ofx->idt_ofx,
         'nom_pessoa' => $membro->nom_membro,
         'num_cpf_pagador' => $membro->num_cpf_membro,

@@ -2,9 +2,13 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
+use App\Enums\Perfil;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Models\Associacao;
+use App\Models\Membro;
+use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
@@ -16,29 +20,29 @@ class DatabaseSeeder extends Seeder
         // User::factory(10)->create();
 
         // Create associations
-        $assocAlfa = \App\Models\Associacao::firstOrCreate(['nom_associacao' => 'Associação Alfa']);
-        $assocBeta = \App\Models\Associacao::firstOrCreate(['nom_associacao' => 'Associação Beta']);
+        $assocAlfa = Associacao::firstOrCreate(['nom_associacao' => 'Associação Alfa']);
+        $assocBeta = Associacao::firstOrCreate(['nom_associacao' => 'Associação Beta']);
 
         // Create Admin (no member needed)
         User::firstOrCreate(
             ['email' => 'admin@example.com'],
             [
                 'name' => 'Admin User',
-                'password' => \Illuminate\Support\Facades\Hash::make('localhost@1'),
-                'role' => \App\Enums\Perfil::ADMIN,
+                'password' => Hash::make('localhost@1'),
+                'role' => Perfil::ADMIN,
                 'email_verified_at' => now(),
             ]
         );
 
         // Create Member for jp.trabalho@gmail.com
-        $membroAdmin = \App\Models\Membro::updateOrCreate(
+        $membroAdmin = Membro::updateOrCreate(
             ['eml_membro' => 'jp.trabalho@gmail.com'],
             [
                 'nom_membro' => 'João Paulo Novais',
                 'num_cpf_membro' => fake('pt_BR')->unique()->cpf(),
                 'tel_membro' => '61981546988',
                 'end_logradouro' => 'Rua Jerivá 113 B',
-                'tip_associado' => \App\Enums\Perfil::ADMIN,
+                'tip_associado' => Perfil::ADMIN,
                 'idt_associacao' => $assocAlfa->idt_associacao,
                 'ind_aprovado' => true,
             ]
@@ -49,22 +53,22 @@ class DatabaseSeeder extends Seeder
             ['email' => 'jp.trabalho@gmail.com'],
             [
                 'name' => 'João Paulo Novais',
-                'password' => \Illuminate\Support\Facades\Hash::make('localhost@1'),
-                'role' => \App\Enums\Perfil::ADMIN,
+                'password' => Hash::make('localhost@1'),
+                'role' => Perfil::ADMIN,
                 'email_verified_at' => now(),
                 'idt_membro' => $membroAdmin->idt_membro,
             ]
         );
 
         // Create Member for Diretor
-        $membroDiretor = \App\Models\Membro::updateOrCreate(
+        $membroDiretor = Membro::updateOrCreate(
             ['eml_membro' => 'diretor@email.com'],
             [
                 'nom_membro' => 'Diretor User',
                 'num_cpf_membro' => fake('pt_BR')->unique()->cpf(),
                 'tel_membro' => '61999999999',
                 'dat_nascimento' => '1980-08-20',
-                'tip_associado' => \App\Enums\Perfil::DIRETOR,
+                'tip_associado' => Perfil::DIRETOR,
                 'idt_associacao' => $assocAlfa->idt_associacao,
                 'ind_aprovado' => true,
             ]
@@ -75,15 +79,15 @@ class DatabaseSeeder extends Seeder
             ['email' => 'diretor@email.com'],
             [
                 'name' => 'Diretor User',
-                'password' => \Illuminate\Support\Facades\Hash::make('localhost@1'),
-                'role' => \App\Enums\Perfil::DIRETOR,
+                'password' => Hash::make('localhost@1'),
+                'role' => Perfil::DIRETOR,
                 'email_verified_at' => now(),
                 'idt_membro' => $membroDiretor->idt_membro,
             ]
         );
 
         // Create Member for membro@email.com
-        $membroJP = \App\Models\Membro::updateOrCreate(
+        $membroJP = Membro::updateOrCreate(
             ['eml_membro' => 'membro@email.com'],
             [
                 'nom_membro' => 'João Paulo Silva',
@@ -93,7 +97,7 @@ class DatabaseSeeder extends Seeder
                 'end_logradouro' => 'Rua das Flores',
                 'end_numero' => '123',
                 'end_complemento' => 'Jardim Primavera',
-                'tip_associado' => \App\Enums\Perfil::MEMBRO,
+                'tip_associado' => Perfil::MEMBRO,
                 'idt_associacao' => $assocAlfa->idt_associacao,
                 'ind_aprovado' => true,
                 'ind_notificar_whatsapp' => true,
@@ -107,15 +111,15 @@ class DatabaseSeeder extends Seeder
             ['email' => 'membro@email.com'],
             [
                 'name' => 'João Paulo Silva',
-                'password' => \Illuminate\Support\Facades\Hash::make('localhost@1'),
-                'role' => \App\Enums\Perfil::MEMBRO,
+                'password' => Hash::make('localhost@1'),
+                'role' => Perfil::MEMBRO,
                 'email_verified_at' => now(),
                 'idt_membro' => $membroJP->idt_membro,
             ]
         );
 
         // Create Member for pendente@email.com
-        $membroMaria = \App\Models\Membro::updateOrCreate(
+        $membroMaria = Membro::updateOrCreate(
             ['eml_membro' => 'pendente@email.com'],
             [
                 'nom_membro' => 'Maria Oliveira',
@@ -125,7 +129,7 @@ class DatabaseSeeder extends Seeder
                 'end_logradouro' => 'Avenida Brasil',
                 'end_numero' => '456',
                 'end_complemento' => 'Centro',
-                'tip_associado' => \App\Enums\Perfil::MEMBRO,
+                'tip_associado' => Perfil::MEMBRO,
                 'idt_associacao' => $assocBeta->idt_associacao,
                 'ind_aprovado' => false,
                 'ind_notificar_whatsapp' => true,
@@ -139,15 +143,15 @@ class DatabaseSeeder extends Seeder
             ['email' => 'pendente@email.com'],
             [
                 'name' => 'Maria Oliveira',
-                'password' => \Illuminate\Support\Facades\Hash::make('localhost@1'),
-                'role' => \App\Enums\Perfil::MEMBRO,
+                'password' => Hash::make('localhost@1'),
+                'role' => Perfil::MEMBRO,
                 'email_verified_at' => now(),
                 'idt_membro' => $membroMaria->idt_membro,
             ]
         );
 
         // Create Member for devedor@email.com
-        $membroDevedor = \App\Models\Membro::updateOrCreate(
+        $membroDevedor = Membro::updateOrCreate(
             ['eml_membro' => 'devedor@email.com'],
             [
                 'nom_membro' => 'Devedor da Silva',
@@ -157,7 +161,7 @@ class DatabaseSeeder extends Seeder
                 'end_logradouro' => 'Rua do Atraso',
                 'end_numero' => '789',
                 'end_complemento' => 'Bairro Alto',
-                'tip_associado' => \App\Enums\Perfil::MEMBRO,
+                'tip_associado' => Perfil::MEMBRO,
                 'idt_associacao' => $assocAlfa->idt_associacao,
                 'ind_aprovado' => true,
                 'ind_notificar_whatsapp' => true,
@@ -171,8 +175,8 @@ class DatabaseSeeder extends Seeder
             ['email' => 'devedor@email.com'],
             [
                 'name' => 'Devedor da Silva',
-                'password' => \Illuminate\Support\Facades\Hash::make('localhost@1'),
-                'role' => \App\Enums\Perfil::MEMBRO,
+                'password' => Hash::make('localhost@1'),
+                'role' => Perfil::MEMBRO,
                 'email_verified_at' => now(),
                 'idt_membro' => $membroDevedor->idt_membro,
             ]

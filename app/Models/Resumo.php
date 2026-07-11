@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,7 +10,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Resumo extends Model
 {
     use HasFactory;
-
 
     protected $table = 'resumos';
 
@@ -44,13 +44,13 @@ class Resumo extends Model
 
     protected static function booted(): void
     {
-        static::addGlobalScope('associacao', function (\Illuminate\Database\Eloquent\Builder $builder) {
-            if (auth()->check() && !auth()->user()->isAdmin()) {
+        static::addGlobalScope('associacao', function (Builder $builder) {
+            if (auth()->check() && ! auth()->user()->isAdmin()) {
                 $associacaoId = auth()->user()->getMembroAssociacaoId();
                 $builder->whereIn('idt_ofx', function ($query) use ($associacaoId) {
                     $query->select('idt_ofx')
-                          ->from('ofx')
-                          ->where('idt_associacao', $associacaoId);
+                        ->from('ofx')
+                        ->where('idt_associacao', $associacaoId);
                 });
             }
         });

@@ -56,7 +56,7 @@ class PhoneService
         }
 
         if (strlen($digits) === 9 || strlen($digits) === 8) {
-            $digits = '61' . $digits; // DDD padrão adaptável
+            $digits = '61'.$digits; // DDD padrão adaptável
         }
 
         return $digits;

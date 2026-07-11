@@ -15,7 +15,7 @@ class BoasVindasMail extends Mailable
 
     public function build()
     {
-        return $this->subject('Bem-vindo(a) ao ' . config('app.name') . '! 🎉')
+        return $this->subject('Bem-vindo(a) ao '.config('app.name').'! 🎉')
             ->html($this->getHtmlContent());
     }
 

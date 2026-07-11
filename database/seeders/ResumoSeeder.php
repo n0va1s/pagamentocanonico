@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Membro;
 use App\Models\Ofx;
 use App\Models\Resumo;
 use Illuminate\Database\Seeder;
@@ -25,7 +26,7 @@ class ResumoSeeder extends Seeder
         }
 
         foreach ($ofxImports as $ofx) {
-            $membros = \App\Models\Membro::where('idt_associacao', $ofx->idt_associacao)->get();
+            $membros = Membro::where('idt_associacao', $ofx->idt_associacao)->get();
 
             foreach ($membros as $membro) {
                 // Determine if this member is adimplente or inadimplente
@@ -43,7 +44,7 @@ class ResumoSeeder extends Seeder
                     $data = now()->subMonths($mes);
                     $numMes = (int) $data->format('n');
                     $numAno = (int) $data->format('Y');
-                    
+
                     if ($isInadimplente) {
                         $total = 0; // Value must be 0 for them to be Inadimplente in dashboard
                         $indPago = false;

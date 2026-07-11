@@ -9,7 +9,7 @@ class CpfService
      */
     public static function validate(?string $cpf): bool
     {
-        if (!$cpf) {
+        if (! $cpf) {
             return false;
         }
 
@@ -45,7 +45,7 @@ class CpfService
      */
     public static function format(?string $cpf): ?string
     {
-        if (!$cpf) {
+        if (! $cpf) {
             return null;
         }
 

@@ -4,8 +4,14 @@ namespace App\Actions\Fortify;
 
 use App\Concerns\PasswordValidationRules;
 use App\Concerns\ProfileValidationRules;
+use App\Enums\Perfil;
 use App\Models\User;
+use App\Rules\Cpf;
+use App\Rules\Telefone;
+use App\Services\CpfService;
+use App\Services\PhoneService;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Laravel\Fortify\Contracts\CreatesNewUsers;
 
 class CreateNewUser implements CreatesNewUsers
@@ -20,10 +26,10 @@ class CreateNewUser implements CreatesNewUsers
     public function create(array $input): User
     {
         if (isset($input['num_cpf_membro'])) {
-            $input['num_cpf_membro'] = \App\Services\CpfService::format($input['num_cpf_membro']);
+            $input['num_cpf_membro'] = CpfService::format($input['num_cpf_membro']);
         }
         if (isset($input['tel_membro'])) {
-            $input['tel_membro'] = \App\Services\PhoneService::format($input['tel_membro']);
+            $input['tel_membro'] = PhoneService::format($input['tel_membro']);
         }
 
         // Merge formatted values back to request helper so User model booted hook gets formatted values
@@ -41,8 +47,8 @@ class CreateNewUser implements CreatesNewUsers
             ...$this->profileRules(),
             'password' => $this->passwordRules(),
             'idt_associacao' => ['required', 'exists:associacoes,idt_associacao'],
-            'num_cpf_membro' => ['required', 'string', 'max:14', new \App\Rules\Cpf, \Illuminate\Validation\Rule::unique('membros', 'num_cpf_membro')],
-            'tel_membro' => ['nullable', 'string', 'max:20', new \App\Rules\Telefone],
+            'num_cpf_membro' => ['required', 'string', 'max:14', new Cpf, Rule::unique('membros', 'num_cpf_membro')],
+            'tel_membro' => ['nullable', 'string', 'max:20', new Telefone],
         ], [
             'idt_associacao.required' => 'A associação é obrigatória.',
             'idt_associacao.exists' => 'A associação selecionada é inválida.',
@@ -54,7 +60,7 @@ class CreateNewUser implements CreatesNewUsers
             'name' => $input['name'],
             'email' => $input['email'],
             'password' => $input['password'],
-            'role' => \App\Enums\Perfil::MEMBRO,
+            'role' => Perfil::MEMBRO,
         ]);
     }
 }

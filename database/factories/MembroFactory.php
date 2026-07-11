@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Enums\Perfil;
+use App\Models\Associacao;
 use App\Models\Membro;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -13,7 +14,7 @@ class MembroFactory extends Factory
     public function definition(): array
     {
         return [
-            'idt_associacao' => \App\Models\Associacao::factory(),
+            'idt_associacao' => Associacao::factory(),
             'nom_membro' => fake('pt_BR')->name(),
             'num_cpf_membro' => fake('pt_BR')->unique()->cpf(),
             'ind_aprovado' => true,

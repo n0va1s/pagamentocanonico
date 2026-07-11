@@ -3,6 +3,10 @@
 namespace App\Http\Requests\Membro;
 
 use App\Enums\Perfil;
+use App\Rules\Cpf;
+use App\Rules\Telefone;
+use App\Services\CpfService;
+use App\Services\PhoneService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -17,12 +21,12 @@ class UpdateMembroRequest extends FormRequest
     {
         if ($this->has('num_cpf_membro')) {
             $this->merge([
-                'num_cpf_membro' => \App\Services\CpfService::format($this->num_cpf_membro),
+                'num_cpf_membro' => CpfService::format($this->num_cpf_membro),
             ]);
         }
         if ($this->has('tel_membro')) {
             $this->merge([
-                'tel_membro' => \App\Services\PhoneService::format($this->tel_membro),
+                'tel_membro' => PhoneService::format($this->tel_membro),
             ]);
         }
     }
@@ -33,10 +37,10 @@ class UpdateMembroRequest extends FormRequest
 
         return [
             'nom_membro' => ['sometimes', 'required', 'string', 'max:255'],
-            'num_cpf_membro' => ['sometimes', 'required', 'string', 'max:14', new \App\Rules\Cpf, Rule::unique('membros', 'num_cpf_membro')->ignore($membroId, 'idt_membro')],
+            'num_cpf_membro' => ['sometimes', 'required', 'string', 'max:14', new Cpf, Rule::unique('membros', 'num_cpf_membro')->ignore($membroId, 'idt_membro')],
             'nom_apelido' => ['nullable', 'string', 'max:100'],
             'eml_membro' => ['sometimes', 'required', 'email', 'max:255', Rule::unique('membros', 'eml_membro')->ignore($membroId, 'idt_membro')],
-            'tel_membro' => ['nullable', 'string', 'max:20', new \App\Rules\Telefone],
+            'tel_membro' => ['nullable', 'string', 'max:20', new Telefone],
             'end_logradouro' => ['nullable', 'string', 'max:150'],
             'end_numero' => ['nullable', 'string', 'max:20'],
             'end_complemento' => ['nullable', 'string', 'max:150'],

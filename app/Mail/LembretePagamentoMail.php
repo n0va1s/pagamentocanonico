@@ -18,7 +18,7 @@ class LembretePagamentoMail extends Mailable
 
     public function build()
     {
-        return $this->subject('[' . config('app.name') . '] Pendência financeira')
+        return $this->subject('['.config('app.name').'] Pendência financeira')
             ->html($this->getHtmlContent());
     }
 
@@ -27,7 +27,7 @@ class LembretePagamentoMail extends Mailable
         $nome = explode(' ', trim($this->membro->nom_membro))[0];
         $mes = $this->dados['mes'] ?? 'mês anterior';
         $valor = isset($this->dados['valor'])
-            ? 'R$ ' . number_format((float) $this->dados['valor'], 2, ',', '.')
+            ? 'R$ '.number_format((float) $this->dados['valor'], 2, ',', '.')
             : 'valor em aberto';
         $associacao = $this->membro->associacao?->nom_associacao ?? 'nossa Associação';
         $appName = config('app.name');

@@ -3,12 +3,16 @@
 namespace App\Models;
 
 use App\Enums\Perfil;
+use App\Mail\BoasVindasMail;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+
 class Membro extends Model
 {
     use HasFactory;
-
 
     protected $table = 'membros';
 
@@ -33,7 +37,6 @@ class Membro extends Model
         'des_telegram_chat_id',
     ];
 
-
     public function associacao()
     {
         return $this->belongsTo(Associacao::class, 'idt_associacao', 'idt_associacao');
@@ -52,8 +55,8 @@ class Membro extends Model
 
     protected static function booted(): void
     {
-        static::addGlobalScope('associacao', function (\Illuminate\Database\Eloquent\Builder $builder) {
-            if (auth()->check() && !auth()->user()->isAdmin()) {
+        static::addGlobalScope('associacao', function (Builder $builder) {
+            if (auth()->check() && ! auth()->user()->isAdmin()) {
                 $builder->where('idt_associacao', auth()->user()->getMembroAssociacaoId());
             }
         });
@@ -61,10 +64,10 @@ class Membro extends Model
         static::updated(function (Membro $membro) {
             if ($membro->wasChanged('ind_aprovado') && $membro->ind_aprovado) {
                 try {
-                    \Illuminate\Support\Facades\Mail::to($membro->eml_membro)
-                        ->send(new \App\Mail\BoasVindasMail($membro));
+                    Mail::to($membro->eml_membro)
+                        ->send(new BoasVindasMail($membro));
                 } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::error("Failed to send welcome email to member {$membro->idt_membro}: " . $e->getMessage());
+                    Log::error("Failed to send welcome email to member {$membro->idt_membro}: ".$e->getMessage());
                 }
             }
 

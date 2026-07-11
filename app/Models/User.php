@@ -3,16 +3,16 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\Perfil;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 use Laravel\Fortify\TwoFactorAuthenticatable;
-
-use App\Enums\Perfil;
 
 #[Fillable(['name', 'email', 'password', 'role', 'idt_membro'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
@@ -61,8 +61,6 @@ class User extends Authenticatable
 
     /**
      * Check if user has one of the specified roles
-     *
-     * @param Perfil|string|array $roles
      */
     public function hasRole(Perfil|string|array $roles): bool
     {
@@ -72,6 +70,7 @@ class User extends Authenticatable
                     return true;
                 }
             }
+
             return false;
         }
 
@@ -80,6 +79,7 @@ class User extends Authenticatable
         }
 
         $roleValue = $roles instanceof Perfil ? $roles->value : $roles;
+
         return $this->role->value === $roleValue;
     }
 
@@ -101,23 +101,25 @@ class User extends Authenticatable
     }
 
     protected ?int $membroAssociacaoIdCached = null;
+
     protected static bool $resolvingScope = false;
 
     public function getMembroAssociacaoId(): ?int
     {
-        if (!$this->idt_membro) {
+        if (! $this->idt_membro) {
             return null;
         }
         if ($this->membroAssociacaoIdCached === null) {
             $this->membroAssociacaoIdCached = Membro::withoutGlobalScopes()->where('idt_membro', $this->idt_membro)->value('idt_associacao') ?? -1;
         }
+
         return $this->membroAssociacaoIdCached === -1 ? null : $this->membroAssociacaoIdCached;
     }
 
     protected static function booted(): void
     {
         static::creating(function (User $user) {
-            if (!$user->idt_membro && $user->role !== Perfil::ADMIN && $user->role !== 'admin') {
+            if (! $user->idt_membro && $user->role !== Perfil::ADMIN && $user->role !== 'admin') {
                 $existingMembro = Membro::withoutGlobalScopes()->where('eml_membro', $user->email)->first();
                 if ($existingMembro) {
                     $user->idt_membro = $existingMembro->idt_membro;
@@ -134,10 +136,10 @@ class User extends Authenticatable
 
                         $letters = trim(preg_replace('/[^a-zA-Z]/', '', $rawNumero));
                         if ($letters !== '') {
-                            $loteSuffix = 'Lote ' . strtoupper($letters);
+                            $loteSuffix = 'Lote '.strtoupper($letters);
                             if ($complemento !== null && $complemento !== '') {
                                 if (strpos($complemento, $loteSuffix) === false) {
-                                    $complemento .= ' ' . $loteSuffix;
+                                    $complemento .= ' '.$loteSuffix;
                                 }
                             } else {
                                 $complemento = $loteSuffix;
@@ -173,7 +175,7 @@ class User extends Authenticatable
             }
         });
 
-        static::addGlobalScope('associacao', function (\Illuminate\Database\Eloquent\Builder $builder) {
+        static::addGlobalScope('associacao', function (Builder $builder) {
             if (static::$resolvingScope) {
                 return;
             }
@@ -181,12 +183,12 @@ class User extends Authenticatable
             try {
                 static::$resolvingScope = true;
 
-                if (auth()->check() && !auth()->user()->isAdmin()) {
+                if (auth()->check() && ! auth()->user()->isAdmin()) {
                     $associacaoId = auth()->user()->getMembroAssociacaoId();
                     $builder->whereIn('idt_membro', function ($query) use ($associacaoId) {
                         $query->select('idt_membro')
-                              ->from('membros')
-                              ->where('idt_associacao', $associacaoId);
+                            ->from('membros')
+                            ->where('idt_associacao', $associacaoId);
                     });
                 }
             } finally {

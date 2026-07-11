@@ -14,7 +14,7 @@ test('ofx parser service processes BB OFX file correctly', function () {
     // Ensure sample file exists before running test
     expect(file_exists($filePath))->toBeTrue();
 
-    $service = new OfxParserService();
+    $service = new OfxParserService;
     $ofx = $service->processar($filePath, 'Extrato conta corrente - 032026.ofx');
 
     // Assert Ofx model is correctly saved
@@ -53,18 +53,18 @@ test('ofx parser service processes BB OFX file correctly', function () {
     // Helena summary
     $resumoHelena = Resumo::where('nom_pessoa', 'HELENA PATR')->first();
     expect($resumoHelena)->not->toBeNull();
-    expect((float)$resumoHelena->val_total)->toBe(8.40);
+    expect((float) $resumoHelena->val_total)->toBe(8.40);
     expect($resumoHelena->num_transacao)->toBe(1);
 
     // Maria da Graca summary
     $resumoGraca = Resumo::where('nom_pessoa', 'MARIA DA GRACA')->first();
     expect($resumoGraca)->not->toBeNull();
-    expect((float)$resumoGraca->val_total)->toBe(50.00);
+    expect((float) $resumoGraca->val_total)->toBe(50.00);
     expect($resumoGraca->num_transacao)->toBe(1);
 
     // Servico Federal de summary
     $resumoServico = Resumo::where('nom_pessoa', 'SERVICO FEDERAL DE')->first();
     expect($resumoServico)->not->toBeNull();
-    expect((float)$resumoServico->val_total)->toBe(14830.99);
+    expect((float) $resumoServico->val_total)->toBe(14830.99);
     expect($resumoServico->num_transacao)->toBe(2);
 });

@@ -1,7 +1,6 @@
 <?php
 
 use App\Models\Contato;
-use App\Services\Notifications\Channels\TelegramChannel;
 use Livewire\Volt\Component;
 
 new class extends Component {
@@ -38,17 +37,34 @@ new class extends Component {
         ]);
 
         // 2. Enviar ao Telegram
-        $telegram = app(TelegramChannel::class);
-        $res = $telegram->sendContactRequest($this->nome, $this->email, $this->mensagem);
+        $botToken = config('services.telegram.bot_token', '');
+        $chatId = config('services.telegram.contact_chat_id') ?: env('TELEGRAM_CONTACT_CHAT_ID', '');
+        $enviouTelegram = false;
 
-        if ($res['success']) {
+        if (filled($botToken) && filled($chatId)) {
+            $texto = "📩 <b>Nova Mensagem de Contato</b>\n" .
+                     "👤 <b>Nome:</b> {$this->nome}\n" .
+                     "✉️ <b>E-mail:</b> {$this->email}\n" .
+                     "💬 <b>Mensagem:</b>\n{$this->mensagem}";
+            try {
+                $response = \Illuminate\Support\Facades\Http::post("https://api.telegram.org/bot{$botToken}/sendMessage", [
+                    'chat_id' => $chatId,
+                    'text' => $texto,
+                    'parse_mode' => 'HTML'
+                ]);
+                $enviouTelegram = $response->successful();
+            } catch (\Exception $e) {
+                // ignore
+            }
+        }
+
+        if ($enviouTelegram) {
             \Flux::toast(variant: 'success', text: 'Mensagem enviada com sucesso para a administração!');
-            $this->reset(['nome', 'email', 'mensagem', 'idt_associacao']);
         } else {
             // Se o Telegram falhar, mas salvou no banco, ainda assim informamos que salvou
             \Flux::toast(variant: 'warning', text: 'Mensagem registrada localmente. (Falha temporária ao enviar ao Telegram)');
-            $this->reset(['nome', 'email', 'mensagem', 'idt_associacao']);
         }
+        $this->reset(['nome', 'email', 'mensagem', 'idt_associacao']);
     }
 
     public function mount(): void

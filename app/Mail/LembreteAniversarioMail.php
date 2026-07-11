@@ -7,7 +7,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
 
-class AniversarioMail extends Mailable
+class LembreteAniversarioMail extends Mailable
 {
     use Queueable, SerializesModels;
 
@@ -15,7 +15,7 @@ class AniversarioMail extends Mailable
 
     public function build()
     {
-        return $this->subject('Feliz aniversário! 🎂 - ' . config('app.name'))
+        return $this->subject('Feliz aniversário! 🎂 - '.config('app.name'))
             ->html($this->getHtmlContent());
     }
 

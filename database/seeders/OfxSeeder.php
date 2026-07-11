@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Associacao;
 use App\Models\Ofx;
 use App\Models\Transacao;
 use Illuminate\Database\Seeder;
@@ -10,7 +11,7 @@ class OfxSeeder extends Seeder
 {
     public function run(): void
     {
-        $associacao = \App\Models\Associacao::firstOrCreate(['nom_associacao' => 'Associação Alfa']);
+        $associacao = Associacao::firstOrCreate(['nom_associacao' => 'Associação Alfa']);
 
         // Cria 2 importações OFX com transações e resumos vinculados
         Ofx::factory()

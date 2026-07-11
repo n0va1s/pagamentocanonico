@@ -97,9 +97,9 @@ class OfxParserService
             $name = trim($bloco['NAME'] ?? '');
 
             // Ignora registros informacionais de saldo e transações sem ID único
-            if ($fitid === '' || 
-                str_contains(strtolower($name), 'saldo anterior') || 
-                str_contains(strtolower($name), 'saldo do dia') || 
+            if ($fitid === '' ||
+                str_contains(strtolower($name), 'saldo anterior') ||
+                str_contains(strtolower($name), 'saldo do dia') ||
                 str_contains(strtolower($name), 'saldo anterior/atual')) {
                 continue;
             }

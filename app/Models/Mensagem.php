@@ -10,6 +10,7 @@ class Mensagem extends Model
     use HasFactory;
 
     protected $table = 'mensagem';
+
     protected $primaryKey = 'idt_mensagem';
 
     protected $fillable = [
@@ -54,8 +55,10 @@ class Mensagem extends Model
         return preg_replace_callback('/\{([^{}]+)\}/', function ($match) {
             if (str_contains($match[1], '|')) {
                 $parts = explode('|', $match[1]);
+
                 return trim($parts[array_rand($parts)]);
             }
+
             return $match[0];
         }, $formatted);
     }

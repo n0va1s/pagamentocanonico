@@ -3,13 +3,13 @@
 namespace App\Console\Commands;
 
 use App\Models\Membro;
-use App\Mail\AniversarioMail;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Mail;
 
-class EnviarAniversario extends Command
+class LembreteAniversario extends Command
 {
-    protected $signature = 'membros:enviar-aniversario';
+    protected $signature = 'pag:lembrete-aniversario';
+
     protected $description = 'Envia e-mails de feliz aniversário para todos os aniversariantes do dia';
 
     public function handle()
@@ -28,17 +28,18 @@ class EnviarAniversario extends Command
             if ($membro->eml_membro) {
                 try {
                     Mail::to($membro->eml_membro)
-                        ->send(new AniversarioMail($membro));
+                        ->send(new LembreteAniversarioMail($membro));
 
                     $this->line("E-mail de aniversário enviado para: {$membro->nom_membro} ({$membro->eml_membro})");
                     $enviados++;
                 } catch (\Exception $e) {
-                    $this->error("Falha ao enviar e-mail de aniversário para {$membro->nom_membro}: " . $e->getMessage());
+                    $this->error("Falha ao enviar e-mail de aniversário para {$membro->nom_membro}: ".$e->getMessage());
                 }
             }
         }
 
         $this->info("Concluído! {$enviados} e-mails de feliz aniversário enviados.");
+
         return 0;
     }
 }

@@ -12,7 +12,7 @@ class AssociacaoFactory extends Factory
     public function definition(): array
     {
         return [
-            'nom_associacao' => $this->faker->unique()->company() . ' Association',
+            'nom_associacao' => $this->faker->unique()->company().' Association',
         ];
     }
 }

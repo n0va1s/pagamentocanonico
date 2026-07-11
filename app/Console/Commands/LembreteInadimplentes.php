@@ -2,24 +2,26 @@
 
 namespace App\Console\Commands;
 
+use App\Mail\LembretePagamentoMail;
 use App\Models\Membro;
 use App\Models\Ofx;
 use App\Models\Resumo;
-use App\Mail\LembretePagamentoMail;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Mail;
 
 class LembreteInadimplentes extends Command
 {
-    protected $signature = 'membros:lembrete-inadimplentes';
+    protected $signature = 'pag:lembrete-inadimplentes';
+
     protected $description = 'Envia e-mails de lembrete de pagamento para associados inadimplentes com base no último OFX importado';
 
     public function handle()
     {
         $latestOfx = Ofx::latest()->first();
 
-        if (!$latestOfx) {
+        if (! $latestOfx) {
             $this->warn('Nenhum extrato OFX encontrado no sistema.');
+
             return 0;
         }
 
@@ -33,14 +35,14 @@ class LembreteInadimplentes extends Command
 
         foreach ($resumosPendentes as $resumo) {
             $membro = null;
-            if (!empty($resumo->num_cpf_pagador)) {
+            if (! empty($resumo->num_cpf_pagador)) {
                 $cleanCpf = preg_replace('/\D/', '', $resumo->num_cpf_pagador);
                 $membro = Membro::whereRaw("REPLACE(REPLACE(num_cpf_membro, '.', ''), '-', '') = ?", [$cleanCpf])->first();
-                if (!$membro && strlen($cleanCpf) === 14 && str_starts_with($cleanCpf, '000')) {
+                if (! $membro && strlen($cleanCpf) === 14 && str_starts_with($cleanCpf, '000')) {
                     $membro = Membro::whereRaw("REPLACE(REPLACE(num_cpf_membro, '.', ''), '-', '') = ?", [substr($cleanCpf, 3)])->first();
                 }
             }
-            if (!$membro) {
+            if (! $membro) {
                 $membro = Membro::where('nom_membro', $resumo->nom_pessoa)->first();
             }
 
@@ -50,19 +52,20 @@ class LembreteInadimplentes extends Command
                         'mes' => $resumo->nom_mes,
                         'valor' => $resumo->val_total,
                     ];
-                    
+
                     Mail::to($membro->eml_membro)
                         ->send(new LembretePagamentoMail($membro, $dados));
 
                     $this->line("E-mail enviado para: {$membro->nom_membro} ({$membro->eml_membro})");
                     $enviados++;
                 } catch (\Exception $e) {
-                    $this->error("Falha ao enviar e-mail para {$membro->nom_membro}: " . $e->getMessage());
+                    $this->error("Falha ao enviar e-mail para {$membro->nom_membro}: ".$e->getMessage());
                 }
             }
         }
 
         $this->info("Concluído! {$enviados} e-mails de lembrete enviados.");
+
         return 0;
     }
 }

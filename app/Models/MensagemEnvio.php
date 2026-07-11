@@ -10,6 +10,7 @@ class MensagemEnvio extends Model
     use HasFactory;
 
     protected $table = 'mensagem_envio';
+
     protected $primaryKey = 'idt_mensagem_envio';
 
     protected $fillable = [

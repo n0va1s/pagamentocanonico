@@ -12,6 +12,7 @@ class Associacao extends Model
     use HasFactory, SoftDeletes;
 
     protected $table = 'associacoes';
+
     protected $primaryKey = 'idt_associacao';
 
     protected $fillable = [

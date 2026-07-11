@@ -1,17 +1,17 @@
 <?php
 
-use App\Http\Controllers\OfxUploadController;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 use Livewire\Volt\Volt;
 
 Route::view('/', 'welcome')->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    
+
     Volt::route('/dashboard', 'pages.dashboard')->name('dashboard');
 
     Route::middleware('role:admin,diretor')->group(function () {
-        
+
         Volt::route('/aprovacoes', 'pages.aprovacoes')->name('aprovacoes');
 
         Volt::route('/mensagens', 'mensagens.index')->name('mensagens.index');
@@ -32,3 +32,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 require __DIR__.'/settings.php';
+
+Route::get('/limpar-tudo', function () {
+    Artisan::call('cache:clear');
+    Artisan::call('config:clear');
+    Artisan::call('route:clear');
+    Artisan::call('view:clear');
+
+    return 'Todos os caches foram limpos com sucesso!';
+});
+
+Route::get('/otimizar', function () {
+    Artisan::call('optimize');
+
+    return 'Aplicação otimizada com sucesso! (Configurações e rotas foram cacheadas)';
+});
+
+Route::get('/storage-link', function () {
+    Artisan::call('storage:link');
+
+    return 'Link simbólico do storage criado com sucesso!';
+});
