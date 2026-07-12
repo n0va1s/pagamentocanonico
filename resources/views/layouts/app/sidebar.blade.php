@@ -8,7 +8,7 @@
             <flux:sidebar.header>
                 <div class="flex items-center gap-2">
                     <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm">
-                        <i class="fa-solid fa-chart-line"></i>
+                        <flux:icon name="chart-bar" class="size-4" />
                     </div>
                     <span class="font-bold text-zinc-800 dark:text-white text-sm">Pagamento - Canônico</span>
                 </div>

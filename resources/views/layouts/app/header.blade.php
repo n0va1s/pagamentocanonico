@@ -2,7 +2,6 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="dark">
     <head>
         @include('partials.head')
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     </head>
     <body class="min-h-screen bg-white dark:bg-zinc-800">
         <flux:header container class="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
@@ -10,7 +9,7 @@
 
             <div class="flex items-center gap-2 max-lg:hidden">
                 <div class="w-7 h-7 rounded-md bg-blue-600 flex items-center justify-center text-white text-xs">
-                    <i class="fa-solid fa-chart-line"></i>
+                    <flux:icon name="chart-bar" class="size-4" />
                 </div>
                 <span class="font-bold text-zinc-800 dark:text-white text-sm">Pagamento Canônico</span>
             </div>
@@ -43,7 +42,6 @@
             <flux:spacer />
 
 
-
             <x-desktop-user-menu />
         </flux:header>
 
@@ -52,7 +50,7 @@
             <flux:sidebar.header>
                 <div class="flex items-center gap-2">
                     <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm">
-                        <i class="fa-solid fa-chart-line"></i>
+                        <flux:icon name="chart-bar" class="size-4" />
                     </div>
                     <span class="font-bold text-zinc-800 dark:text-white text-sm">Pagamento - Canônico</span>
                 </div>
