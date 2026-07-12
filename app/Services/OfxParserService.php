@@ -272,7 +272,14 @@ class OfxParserService
 
         // O CPF/CNPJ deve ser o próximo bloco de caracteres (11 a 18 chars com pontuação)
         if (preg_match('/^((?:\d|[\.\-\/]){11,18})/', $memoSemData, $matches)) {
-            return preg_replace('/\D/', '', $matches[1]);
+            $digits = preg_replace('/\D/', '', $matches[1]);
+
+            // Se o CPF vier com zeros adicionais à esquerda (14 dígitos começando com 000)
+            if (strlen($digits) === 14 && str_starts_with($digits, '000')) {
+                $digits = substr($digits, 3);
+            }
+
+            return $digits;
         }
 
         return null;

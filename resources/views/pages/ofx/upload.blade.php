@@ -176,8 +176,8 @@ new class extends Component {
                 if ($selectedMembroId && $extractedCpf) {
                     $membro = Membro::withoutGlobalScopes()->find($selectedMembroId);
                     if ($membro) {
-                        // Atualiza com o CPF extraído do extrato
-                        $membro->update(['num_cpf_membro' => $extractedCpf]);
+                        // Atualiza com o CPF extraído do extrato formatado
+                        $membro->update(['num_cpf_membro' => \App\Services\CpfService::format($extractedCpf)]);
                     }
                 }
             }
@@ -396,7 +396,7 @@ new class extends Component {
                                     R$ {{ number_format($t['valor'], 2, ',', '.') }}
                                 </flux:table.cell>
                                 <flux:table.cell>
-                                    {{ $t['cpf'] ?: 'Não extraído' }}
+                                    {{ $t['cpf'] ? \App\Services\CpfService::format($t['cpf']) : 'Não extraído' }}
                                 </flux:table.cell>
                                 <flux:table.cell>
                                     @if($t['membro_id'])

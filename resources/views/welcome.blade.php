@@ -420,7 +420,7 @@
                 .how-inner { grid-template-columns: 1fr; gap: 2rem; }
                 .contact-wrap { grid-template-columns: 1fr; gap: 2rem; }
                 .footer-inner { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
-                .nav-links .nav-ghost, .nav-links .nav-link { display: none; }
+                .nav-links .nav-register, .nav-links .nav-link { display: none; }
             }
         </style>
     </head>
@@ -454,7 +454,7 @@
                         @endcan
                     @else
                         <a href="{{ route('login') }}" class="nav-ghost" wire:navigate>Entrar</a>
-                        <a href="{{ route('register') }}" class="nav-cta" wire:navigate>Criar conta</a>
+                        <a href="{{ route('register') }}" class="nav-cta nav-register" wire:navigate>Criar conta</a>
                     @endauth
                 </div>
             </div>
