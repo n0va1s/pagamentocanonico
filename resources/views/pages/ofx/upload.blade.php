@@ -26,10 +26,10 @@ new class extends Component {
             $this->idt_associacao = auth()->user()->membro?->idt_associacao;
         }
 
-        // If the association is still null, and there is exactly one association in the database, auto-select it.
+        // If the association is still null, auto-select it.
         if (empty($this->idt_associacao)) {
             $firstAssoc = Associacao::first();
-            if ($firstAssoc && Associacao::count() === 1) {
+            if ($firstAssoc) {
                 $this->idt_associacao = $firstAssoc->idt_associacao;
             }
         }

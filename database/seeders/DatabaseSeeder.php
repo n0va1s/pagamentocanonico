@@ -39,7 +39,7 @@ class DatabaseSeeder extends Seeder
             ['eml_membro' => 'jp.trabalho@gmail.com'],
             [
                 'nom_membro' => 'João Paulo Novais',
-                'num_cpf_membro' => fake('pt_BR')->unique()->cpf(),
+                'num_cpf_membro' => '85236250110',
                 'tel_membro' => '61981546988',
                 'end_logradouro' => 'Rua Jerivá 113 B',
                 'tip_associado' => Perfil::ADMIN,

@@ -48,7 +48,7 @@ new #[Title('Mensagens')] class extends Component {
         </div>
         <div class="flex items-center gap-2 self-start sm:self-auto">
             <flux:button :href="route('mensagens.create')" icon="plus" variant="primary" wire:navigate>
-                Nova Mensagem / Campanha
+                Nova Mensagem
             </flux:button>
         </div>
     </div>

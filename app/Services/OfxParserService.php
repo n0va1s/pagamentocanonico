@@ -106,6 +106,10 @@ class OfxParserService
 
             $valor = (float) str_replace(',', '.', $bloco['TRNAMT'] ?? '0');
 
+            if (Transacao::where('num_transacao', $fitid)->exists()) {
+                continue;
+            }
+
             Transacao::create([
                 'idt_ofx' => $ofx->idt_ofx,
                 'num_transacao' => $fitid,
