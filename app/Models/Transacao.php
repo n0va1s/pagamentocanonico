@@ -19,6 +19,8 @@ class Transacao extends Model
 
     protected $fillable = [
         'idt_ofx',
+        'idt_resumo',
+        'idt_membro',
         'num_transacao',
         'dat_transacao',
         'tip_transacao',
@@ -37,6 +39,11 @@ class Transacao extends Model
     public function ofx(): BelongsTo
     {
         return $this->belongsTo(Ofx::class, 'idt_ofx');
+    }
+
+    public function orcamento()
+    {
+        return $this->hasOne(Orcamento::class, 'idt_transacao');
     }
 
     protected static function booted(): void

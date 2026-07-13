@@ -41,51 +41,40 @@ class VincularMembro extends Command
             foreach ($membros as $membro) {
                 $membroCpf = $membro->num_cpf_membro ? preg_replace('/\D/', '', $membro->num_cpf_membro) : null;
                 
-                // Vinculando Resumos
-                $resumosQuery = Resumo::withoutGlobalScope('associacao')->where(function ($query) use ($membro, $membroCpf) {
-                    $query->where('nom_pessoa', $membro->nom_membro);
-                    
-                    if ($membro->nom_apelido) {
-                        $query->orWhere('nom_pessoa', $membro->nom_apelido);
-                    }
-
-                    if ($membroCpf) {
-                        // CPF exato
-                        $query->orWhereRaw("REPLACE(REPLACE(num_cpf_pagador, '.', ''), '-', '') = ?", [$membroCpf]);
-                        // CPF com zeros à esquerda (BB envia com 14 digitos as vezes)
-                        $query->orWhereRaw("REPLACE(REPLACE(num_cpf_pagador, '.', ''), '-', '') LIKE ?", ['%'.$membroCpf]);
-                    }
-                });
-
-                $afetadosResumo = $resumosQuery->update([
-                    'nom_pessoa' => $membro->nom_membro,
-                    'num_cpf_pagador' => $membroCpf,
-                ]);
-
-                $totalResumosAfetados += $afetadosResumo;
-
                 // Vinculando Transacoes (opcional mas recomendado para consistência)
-                $transacoesQuery = Transacao::withoutGlobalScope('associacao')->where(function ($query) use ($membro, $membroCpf) {
-                    $query->where('nom_pessoa', $membro->nom_membro);
-                    $query->orWhere('des_transacao', 'LIKE', '%' . $membro->nom_membro . '%');
-                    
-                    if ($membro->nom_apelido) {
-                        $query->orWhere('nom_pessoa', $membro->nom_apelido);
-                        $query->orWhere('des_transacao', 'LIKE', '%' . $membro->nom_apelido . '%');
-                    }
+                $transacoesQuery = Transacao::withoutGlobalScope('associacao')
+                    ->whereNull('idt_membro')
+                    ->where(function ($query) use ($membro, $membroCpf) {
+                        $query->where('nom_pessoa', $membro->nom_membro);
+                        $query->orWhere('des_transacao', 'LIKE', '%' . $membro->nom_membro . '%');
+                        
+                        if ($membro->nom_apelido) {
+                            $query->orWhere('nom_pessoa', $membro->nom_apelido);
+                            $query->orWhere('des_transacao', 'LIKE', '%' . $membro->nom_apelido . '%');
+                        }
 
-                    if ($membroCpf) {
-                        $query->orWhereRaw("REPLACE(REPLACE(num_cpf_pagador, '.', ''), '-', '') = ?", [$membroCpf]);
-                        $query->orWhereRaw("REPLACE(REPLACE(num_cpf_pagador, '.', ''), '-', '') LIKE ?", ['%'.$membroCpf]);
-                    }
-                });
+                        if ($membroCpf) {
+                            $query->orWhereRaw("REPLACE(REPLACE(num_cpf_pagador, '.', ''), '-', '') = ?", [$membroCpf]);
+                            $query->orWhereRaw("REPLACE(REPLACE(num_cpf_pagador, '.', ''), '-', '') LIKE ?", ['%'.$membroCpf]);
+                        }
+                    });
 
+                $transacoes = $transacoesQuery->get();
                 $afetadosTransacao = $transacoesQuery->update([
-                    'nom_pessoa' => $membro->nom_membro,
-                    'num_cpf_pagador' => $membroCpf,
+                    'idt_membro' => $membro->idt_membro,
                 ]);
 
                 $totalTransacoesAfetadas += $afetadosTransacao;
+
+                // Vinculando Resumos das transações encontradas
+                $idtResumos = $transacoes->pluck('idt_resumo')->filter()->unique();
+                if ($idtResumos->isNotEmpty()) {
+                    $afetadosResumo = Resumo::withoutGlobalScope('associacao')
+                        ->whereIn('idt_resumo', $idtResumos)
+                        ->update(['idt_membro' => $membro->idt_membro]);
+                    
+                    $totalResumosAfetados += $afetadosResumo;
+                }
             }
 
             DB::commit();

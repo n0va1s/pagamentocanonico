@@ -110,8 +110,15 @@ class OfxParserService
                 continue;
             }
 
+            $cpf = $this->extrairCpfDoMemo($bloco['MEMO'] ?? null);
+            $membro = null;
+            if ($cpf) {
+                $membro = \App\Models\Membro::where('num_cpf', $cpf)->first();
+            }
+
             Transacao::create([
                 'idt_ofx' => $ofx->idt_ofx,
+                'idt_membro' => $membro ? $membro->idt_membro : null,
                 'num_transacao' => $fitid,
                 'dat_transacao' => $datTransacao,
                 'tip_transacao' => $bloco['TRNTYPE'] ?? null,
@@ -119,7 +126,7 @@ class OfxParserService
                 'des_transacao' => $this->limparDescricao($bloco['MEMO'] ?? null),
                 'num_check' => $bloco['CHECKNUM'] ?? null,
                 'nom_pessoa' => $bloco['NAME'] ?? null,
-                'num_cpf_pagador' => $this->extrairCpfDoMemo($bloco['MEMO'] ?? null),
+                'num_cpf_pagador' => $cpf,
             ]);
 
             $valorTotal += $valor;
@@ -134,13 +141,22 @@ class OfxParserService
      */
     private function gerarResumosMensais(Ofx $ofx): void
     {
+        $associacao = \App\Models\Associacao::find($ofx->idt_associacao);
+        $valTaxa = $associacao ? (float) $associacao->val_taxa : 0.0;
+        $valAnual = $associacao ? (float) $associacao->val_anual : 0.0;
+
         $transacoes = $ofx->transacoes()
             ->where('val_transacao', '>', 0) // apenas créditos/recebimentos
             ->get();
 
-        $porPessoa = $transacoes->groupBy('des_transacao');
+        $porPessoa = $transacoes->groupBy(function ($t) {
+            return $t->idt_membro ? 'membro_' . $t->idt_membro : 'nome_' . $t->nom_pessoa;
+        });
 
-        foreach ($porPessoa as $nomePessoa => $transacoesPessoa) {
+        foreach ($porPessoa as $chave => $transacoesPessoa) {
+            $primeiraTransacao = $transacoesPessoa->first();
+            $idtMembro = $primeiraTransacao->idt_membro;
+
             $porMes = $transacoesPessoa->groupBy(
                 fn ($t) => $t->dat_transacao->format('Y').'-'.$t->dat_transacao->format('n')
             );
@@ -150,21 +166,44 @@ class OfxParserService
 
                 $total = $itens->sum('val_transacao');
 
-                Resumo::updateOrCreate(
-                    [
+                $indPago = false;
+                if ($total > 0) {
+                    if (($valTaxa > 0 && $total >= $valTaxa) || ($valAnual > 0 && $total >= $valAnual)) {
+                        $indPago = true;
+                    }
+                }
+
+                if ($idtMembro) {
+                    $resumo = Resumo::updateOrCreate(
+                        [
+                            'idt_ofx' => $ofx->idt_ofx,
+                            'idt_membro' => $idtMembro,
+                            'num_ano' => (int) $ano,
+                            'num_mes' => (int) $mes,
+                        ],
+                        [
+                            'nom_mes' => self::NOMES_MESES[(int) $mes] ?? "Mês {$mes}",
+                            'val_total' => $total,
+                            'qtd_transacao' => $itens->count(),
+                            'ind_pago' => $indPago,
+                        ]
+                    );
+                } else {
+                    $resumo = Resumo::create([
                         'idt_ofx' => $ofx->idt_ofx,
-                        'nom_pessoa' => $nomePessoa,
+                        'idt_membro' => null,
                         'num_ano' => (int) $ano,
                         'num_mes' => (int) $mes,
-                    ],
-                    [
                         'nom_mes' => self::NOMES_MESES[(int) $mes] ?? "Mês {$mes}",
                         'val_total' => $total,
-                        'num_transacao' => $itens->count(),
-                        'ind_pago' => $total > 0,
-                        'num_cpf_pagador' => $itens->first()->num_cpf_pagador,
-                    ]
-                );
+                        'qtd_transacao' => $itens->count(),
+                        'ind_pago' => $indPago,
+                    ]);
+                }
+
+                foreach ($itens as $item) {
+                    $item->update(['idt_resumo' => $resumo->idt_resumo]);
+                }
             }
         }
     }

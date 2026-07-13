@@ -59,7 +59,9 @@ new #[Title('Dashboard')] class extends Component {
                 $this->selectedImportId = $latest ? $latest->idt_ofx : null;
             }
             
-            $this->selectedAssociacaoId = $user->membro?->idt_associacao;
+            if (!$user->isAdmin()) {
+                $this->selectedAssociacaoId = $user->membro?->idt_associacao;
+            }
         }
     }
 
@@ -417,11 +419,7 @@ new #[Title('Dashboard')] class extends Component {
                                 <form wire:submit="submitContact" style="display:flex;flex-direction:column;gap:1rem">
                                     <flux:input label="Seu nome" wire:model="contactName" />
                                     <flux:input label="Seu e-mail" wire:model="contactEmail" disabled />
-                                    <flux:select label="Associação" wire:model="contactAssociacaoId" placeholder="Selecione a associação..." disabled>
-                                        @foreach($associacoes as $assoc)
-                                            <flux:select.option value="{{ $assoc->idt_associacao }}">{{ $assoc->nom_associacao }}</flux:select.option>
-                                        @endforeach
-                                    </flux:select>
+                                    <x-select-associacao label="Associação" wire:model="contactAssociacaoId" placeholder="Selecione a associação..." disabled />
                                     <flux:textarea label="Mensagem para a administração" wire:model="contactMessage" rows="4" placeholder="Olá, gostaria de solicitar a vinculação do meu e-mail à minha conta de associado..." />
                                     <button type="submit" class="pc-btn pc-btn-primary" style="width:100%;justify-content:center">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
@@ -474,7 +472,6 @@ new #[Title('Dashboard')] class extends Component {
                     {{-- Tabs --}}
                     <div class="pc-tabs">
                         <button class="pc-tab {{ $activeTab === 'pagamentos' ? 'active' : '' }}" wire:click="$set('activeTab','pagamentos')">Pagamentos</button>
-                        <button class="pc-tab {{ $activeTab === 'perfil' ? 'active' : '' }}" wire:click="$set('activeTab','perfil')">Meus Dados</button>
                         <button class="pc-tab {{ $activeTab === 'contato' ? 'active' : '' }}" wire:click="$set('activeTab','contato')">Fale com a Associação</button>
                     </div>
 
@@ -541,62 +538,6 @@ new #[Title('Dashboard')] class extends Component {
 
                             @endif
 
-                            @if($activeTab === 'perfil')
-                            <div class="pc-card">
-                                <div class="pc-card-header">
-                                    <span class="pc-card-title">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                                        Atualizar dados cadastrais
-                                    </span>
-                                </div>
-                                <div class="pc-card-body">
-                                    <form wire:submit="updateProfile" style="display:flex;flex-direction:column;gap:0">
-
-                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                                            <div class="sm:col-span-2">
-                                                <flux:field>
-                                                    <flux:label required>Nome completo</flux:label>
-                                                    <flux:input wire:model="nom_membro" />
-                                                    <flux:error name="nom_membro" />
-                                                </flux:field>
-                                            </div>
-                                            <flux:field>
-                                                <flux:label>Apelido</flux:label>
-                                                <flux:input wire:model="nom_apelido" placeholder="Seu apelido..." />
-                                                <flux:error name="nom_apelido" />
-                                            </flux:field>
-                                            <flux:field>
-                                                <flux:label>WhatsApp</flux:label>
-                                                <flux:input wire:model="tel_membro" placeholder="(00) 00000-0000" />
-                                                <flux:error name="tel_membro" />
-                                            </flux:field>
-                                            <div class="sm:col-span-2">
-                                                <flux:field>
-                                                    <flux:label>Endereço</flux:label>
-                                                    <flux:input wire:model="end_logradouro" />
-                                                    <flux:error name="end_logradouro" />
-                                                </flux:field>
-                                            </div>
-                                            <flux:field>
-                                                <flux:label>Número</flux:label>
-                                                <flux:input wire:model="end_numero" />
-                                                <flux:error name="end_numero" />
-                                            </flux:field>
-                                            <flux:field>
-                                                <flux:label>Complemento</flux:label>
-                                                <flux:input wire:model="end_complemento" />
-                                                <flux:error name="end_complemento" />
-                                            </flux:field>
-                                        </div>
-
-                                        <button type="submit" class="pc-btn pc-btn-primary" style="width:100%;justify-content:center">
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                                            Salvar alterações
-                                        </button>
-                                    </form>
-                                </div>
-                            </div>
-                            @endif
 
                             @if($activeTab === 'contato')
                             <div class="pc-card">
@@ -659,8 +600,9 @@ new #[Title('Dashboard')] class extends Component {
 
                             {{-- Perfil resumido --}}
                             <div class="pc-card">
-                                <div class="pc-card-header">
+                                <div class="pc-card-header" style="display: flex; justify-content: space-between; align-items: center;">
                                     <span class="pc-card-title">Perfil</span>
+                                    <a href="/settings/profile" style="font-size: 0.75rem; color: var(--pc-primary); text-decoration: none; font-weight: 600;">Editar Perfil</a>
                                 </div>
                                 <div class="pc-card-body" style="display:flex;flex-direction:column;gap:0.875rem">
                                     <div>
@@ -703,22 +645,9 @@ new #[Title('Dashboard')] class extends Component {
                         <div class="flex flex-col gap-1 flex-1 sm:flex-initial">
                             <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Associação Selecionada</p>
                             @if(auth()->user()->isAdmin())
-                                <flux:select wire:model.live="selectedAssociacaoId" class="w-full sm:w-64" placeholder="Todas as Associações">
-                                    <flux:select.option value="">Todas as Associações</flux:select.option>
-                                    @foreach($allAssociacoes as $assoc)
-                                        <flux:select.option value="{{ $assoc->idt_associacao }}">
-                                            {{ $assoc->nom_associacao }}
-                                        </flux:select.option>
-                                    @endforeach
-                                </flux:select>
+                                <x-select-associacao wire:model.live="selectedAssociacaoId" class="w-full sm:w-64" :show-all-option="true" />
                             @else
-                                <flux:select wire:model.live="selectedAssociacaoId" class="w-full sm:w-64" disabled>
-                                    @foreach($allAssociacoes as $assoc)
-                                        <flux:select.option value="{{ $assoc->idt_associacao }}">
-                                            {{ $assoc->nom_associacao }}
-                                        </flux:select.option>
-                                    @endforeach
-                                </flux:select>
+                                <x-select-associacao wire:model.live="selectedAssociacaoId" class="w-full sm:w-64" disabled :associacoes="$allAssociacoes" />
                             @endif
                         </div>
                     </div>

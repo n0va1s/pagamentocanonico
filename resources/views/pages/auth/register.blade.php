@@ -8,18 +8,12 @@
         <form method="POST" action="{{ route('register.store') }}" class="flex flex-col gap-6">
             @csrf
             <!-- Associação -->
-            <flux:select
+            <x-select-associacao
                 name="idt_associacao"
                 :label="__('Associação')"
                 placeholder="Selecione a associação..."
                 required
-            >
-                @foreach(\App\Models\Associacao::orderBy('nom_associacao')->get() as $assoc)
-                    <flux:select.option value="{{ $assoc->idt_associacao }}">
-                        {{ $assoc->nom_associacao }}
-                    </flux:select.option>
-                @endforeach
-            </flux:select>
+            />
 
             <!-- CPF & Nome -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">

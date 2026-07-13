@@ -122,14 +122,7 @@ new #[Title('Membros')] class extends Component {
         </div>
         @if(auth()->user()->isAdmin())
             <div class="sm:w-60">
-                <flux:select wire:model.live="selectedAssociacaoId" aria-label="Associação">
-                    <flux:select.option value="">Todas as Associações</flux:select.option>
-                    @foreach ($associacoes as $assoc)
-                        <flux:select.option value="{{ $assoc->idt_associacao }}">
-                            {{ $assoc->nom_associacao }}
-                        </flux:select.option>
-                    @endforeach
-                </flux:select>
+                <x-select-associacao wire:model.live="selectedAssociacaoId" aria-label="Associação" :show-all-option="true" />
             </div>
         @endif
         <div class="sm:w-52">

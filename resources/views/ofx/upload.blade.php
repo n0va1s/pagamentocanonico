@@ -10,11 +10,6 @@
                     Importe arquivos de extrato bancário no formato OFX para processar transações e acompanhar a adimplência dos associados.
                 </p>
             </div>
-            <div class="flex items-center gap-2 self-start sm:self-auto">
-                <flux:button href="{{ route('dashboard') }}" variant="ghost" icon="arrow-left" size="sm" wire:navigate>
-                    Voltar ao Dashboard
-                </flux:button>
-            </div>
         </div>
 
         {{-- Alerts --}}
@@ -32,33 +27,15 @@
                 <form action="{{ route('upload.store') }}" method="POST" enctype="multipart/form-data" class="space-y-6">
                     @csrf
 
-                        <flux:field>
-                            <flux:label for="idt_associacao" class="font-semibold text-zinc-700 dark:text-zinc-300">Associação</flux:label>
                             @if(auth()->user()->isAdmin())
-                                <flux:select id="idt_associacao" name="idt_associacao" placeholder="Selecione a associação..." required>
-                                    @foreach(\App\Models\Associacao::orderBy('nom_associacao')->get() as $assoc)
-                                        <flux:select.option value="{{ $assoc->idt_associacao }}">
-                                            {{ $assoc->nom_associacao }}
-                                        </flux:select.option>
-                                    @endforeach
-                                </flux:select>
+                                <x-select-associacao id="idt_associacao" name="idt_associacao" label="Associação" :show-all-option="true" required />
                             @else
-                                <flux:select id="idt_associacao_disabled" placeholder="Selecione a associação..." disabled>
-                                    @foreach(\App\Models\Associacao::orderBy('nom_associacao')->get() as $assoc)
-                                        <flux:select.option value="{{ $assoc->idt_associacao }}" :selected="auth()->user()->membro?->idt_associacao === $assoc->idt_associacao">
-                                            {{ $assoc->nom_associacao }}
-                                        </flux:select.option>
-                                    @endforeach
-                                </flux:select>
+                                <x-select-associacao id="idt_associacao_disabled" label="Associação" :show-all-option="true" disabled :associacoes="\App\Models\Associacao::where('idt_associacao', auth()->user()->membro?->idt_associacao)->get()" />
                                 <input type="hidden" name="idt_associacao" value="{{ auth()->user()->membro?->idt_associacao }}">
                             @endif
-                            @error('idt_associacao')
-                                <p class="text-xs text-red-500 mt-1 font-medium">{{ $message }}</p>
-                            @enderror
-                        </flux:field>
 
                     <flux:field>
-                        <flux:label for="ofx_file" class="font-semibold text-zinc-700 dark:text-zinc-300">Selecione o arquivo OFX</flux:label>
+                        <flux:label>Selecione o arquivo OFX</flux:label>
                         
                         <div class="flex items-center justify-center w-full mt-2">
                             <label for="ofx_file" class="flex flex-col items-center justify-center w-full h-44 border-2 border-zinc-300 border-dashed rounded-xl cursor-pointer bg-zinc-50 dark:hover:bg-zinc-800/40 dark:bg-zinc-900/10 hover:bg-zinc-100/50 dark:border-zinc-700 transition focus-within:ring-2 focus-within:ring-blue-500 focus-within:outline-none">

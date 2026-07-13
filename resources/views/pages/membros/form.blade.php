@@ -198,14 +198,7 @@ new class extends Component {
                 @if(auth()->user()->isAdmin())
                 <flux:field>
                     <flux:label required for="idt_associacao">Associação</flux:label>
-                    <flux:select id="idt_associacao" wire:model="idt_associacao">
-                        <flux:select.option value="">Selecione...</flux:select.option>
-                        @foreach ($associacoes as $assoc)
-                            <flux:select.option value="{{ $assoc->idt_associacao }}">
-                                {{ $assoc->nom_associacao }}
-                            </flux:select.option>
-                        @endforeach
-                    </flux:select>
+                    <x-select-associacao id="idt_associacao" wire:model="idt_associacao" placeholder="Selecione..." />
                     <flux:error name="idt_associacao" />
                 </flux:field>
                 @endif

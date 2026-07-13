@@ -71,14 +71,7 @@ new #[Title('Aprovações Pendentes')] class extends Component {
         {{-- Filtros --}}
         <flux:card class="flex flex-col sm:flex-row gap-3">
             <div class="sm:w-72">
-                <flux:select wire:model.live="selectedAssociacaoId" aria-label="Associação">
-                    <flux:select.option value="">Todas as Associações</flux:select.option>
-                    @foreach ($associacoes as $assoc)
-                        <flux:select.option value="{{ $assoc->idt_associacao }}">
-                            {{ $assoc->nom_associacao }}
-                        </flux:select.option>
-                    @endforeach
-                </flux:select>
+                <x-select-associacao wire:model.live="selectedAssociacaoId" aria-label="Associação" :show-all-option="true" />
             </div>
         </flux:card>
     @endif

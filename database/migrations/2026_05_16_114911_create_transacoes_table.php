@@ -11,6 +11,8 @@ return new class extends Migration
         Schema::create('transacoes', function (Blueprint $table) {
             $table->id('idt_transacao');
             $table->foreignId('idt_ofx')->constrained('ofx', 'idt_ofx')->onDelete('cascade');
+            $table->foreignId('idt_resumo')->nullable()->constrained('resumos', 'idt_resumo')->nullOnDelete();
+            $table->foreignId('idt_membro')->nullable()->constrained('membros', 'idt_membro')->nullOnDelete();
             $table->string('num_transacao')->nullable(); // ID único da transação no OFX
             $table->date('dat_transacao'); // DTPOSTED
             $table->string('tip_transacao', 20)->nullable(); // TRNTYPE (DEBIT/CREDIT)
@@ -24,6 +26,8 @@ return new class extends Migration
             $table->index(['idt_ofx', 'dat_transacao']);
             $table->index('des_transacao');
             $table->index('num_cpf_pagador');
+            $table->index('idt_membro');
+            $table->index('idt_resumo');
         });
     }
 

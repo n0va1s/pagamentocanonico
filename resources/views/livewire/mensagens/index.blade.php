@@ -9,8 +9,14 @@ new #[Title('Mensagens')] class extends Component {
     use WithPagination;
 
     public string $search = '';
+    public string $selectedAssociacaoId = '';
 
     public function updatedSearch(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedSelectedAssociacaoId(): void
     {
         $this->resetPage();
     }
@@ -23,6 +29,12 @@ new #[Title('Mensagens')] class extends Component {
                     'envios',
                     'envios as envios_sucesso_count' => fn($q) => $q->where('ind_enviado', true)
                 ])
+                ->when(!auth()->user()->isAdmin(), function ($query) {
+                    $query->where('idt_associacao', auth()->user()->membro?->idt_associacao);
+                })
+                ->when(auth()->user()->isAdmin() && $this->selectedAssociacaoId, function ($query) {
+                    $query->where('idt_associacao', $this->selectedAssociacaoId);
+                })
                 ->when($this->search, function ($query) {
                     $query->where('nom_campanha', 'like', '%' . $this->search . '%')
                         ->orWhereHas('associacao', function ($q) {
@@ -64,6 +76,11 @@ new #[Title('Mensagens')] class extends Component {
                 aria-label="Buscar mensagens ou campanhas"
             />
         </div>
+        @if(auth()->user()->isAdmin())
+            <div class="sm:w-60">
+                <x-select-associacao wire:model.live="selectedAssociacaoId" aria-label="Associação" :show-all-option="true" />
+            </div>
+        @endif
     </flux:card>
 
     {{-- Lista/Cards --}}

@@ -11,19 +11,17 @@ return new class extends Migration
         Schema::create('resumos', function (Blueprint $table) {
             $table->id('idt_resumo');
             $table->foreignId('idt_ofx')->constrained('ofx', 'idt_ofx')->onDelete('cascade');
-            $table->string('nom_pessoa'); // Nome extraído do MEMO
+            $table->foreignId('idt_membro')->nullable()->constrained('membros', 'idt_membro')->nullOnDelete();
             $table->integer('num_ano');
             $table->integer('num_mes'); // 1-12
             $table->string('nom_mes', 10); // Jan, Fev, Mar...
             $table->decimal('val_total', 15, 2)->default(0);
-            $table->integer('num_transacao')->default(0);
+            $table->integer('qtd_transacao')->default(0);
             $table->boolean('ind_pago')->default(false);
-            $table->string('num_cpf_pagador', 14)->nullable();
             $table->timestamps();
 
-            $table->unique(['idt_ofx', 'nom_pessoa', 'num_ano', 'num_mes']);
-            $table->index(['idt_ofx', 'nom_pessoa']);
-            $table->index('num_cpf_pagador');
+            $table->unique(['idt_ofx', 'idt_membro', 'num_ano', 'num_mes']);
+            $table->index(['idt_ofx', 'idt_membro']);
         });
     }
 

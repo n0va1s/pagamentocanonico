@@ -13,6 +13,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('role:admin,diretor')->group(function () {
 
         Volt::route('/aprovacoes', 'pages.aprovacoes')->name('aprovacoes');
+        Volt::route('/orcamentos', 'pages.orcamentos.index')->name('orcamentos');
 
         Volt::route('/mensagens', 'mensagens.index')->name('mensagens.index');
         Volt::route('/mensagens/criar', 'mensagens.create')->name('mensagens.create');

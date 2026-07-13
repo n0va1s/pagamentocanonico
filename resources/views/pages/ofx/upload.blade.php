@@ -26,13 +26,7 @@ new class extends Component {
             $this->idt_associacao = auth()->user()->membro?->idt_associacao;
         }
 
-        // If the association is still null, auto-select it.
-        if (empty($this->idt_associacao)) {
-            $firstAssoc = Associacao::first();
-            if ($firstAssoc) {
-                $this->idt_associacao = $firstAssoc->idt_associacao;
-            }
-        }
+
     }
 
     public function updatedIdtAssociacao()
@@ -285,11 +279,6 @@ new class extends Component {
                 Selecione a associação, o arquivo e processe para validar as transações e vínculos com membros.
             </p>
         </div>
-        <div class="flex items-center gap-2 self-start sm:self-auto">
-            <flux:button href="{{ route('dashboard') }}" variant="ghost" icon="arrow-left" size="sm" wire:navigate>
-                Voltar ao Dashboard
-            </flux:button>
-        </div>
     </div>
 
     {{-- Alerts --}}
@@ -306,29 +295,11 @@ new class extends Component {
         <flux:card class="p-6">
             <form wire:submit.prevent="processar" class="space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-                    <flux:field>
-                        <flux:label for="idt_associacao" class="font-semibold text-zinc-700 dark:text-zinc-300">Associação</flux:label>
-                        <div class="mt-2">
-                            @if(auth()->user()->isAdmin())
-                                <flux:select id="idt_associacao" wire:model.live="idt_associacao" placeholder="Selecione a associação..." required>
-                                    @foreach($associacoes as $assoc)
-                                        <flux:select.option value="{{ $assoc->idt_associacao }}">
-                                            {{ $assoc->nom_associacao }}
-                                        </flux:select.option>
-                                    @endforeach
-                                </flux:select>
-                            @else
-                                <flux:select id="idt_associacao_disabled" placeholder="Selecione a associação..." disabled>
-                                    @foreach($associacoes as $assoc)
-                                        <flux:select.option value="{{ $assoc->idt_associacao }}" :selected="$idt_associacao === $assoc->idt_associacao">
-                                            {{ $assoc->nom_associacao }}
-                                        </flux:select.option>
-                                    @endforeach
-                                </flux:select>
-                            @endif
-                        </div>
-                        <flux:error name="idt_associacao" />
-                    </flux:field>
+                    @if(auth()->user()->isAdmin())
+                        <x-select-associacao id="idt_associacao" label="Associação" wire:model.live="idt_associacao" :show-all-option="true" required />
+                    @else
+                        <x-select-associacao id="idt_associacao_disabled" label="Associação" :show-all-option="true" disabled :associacoes="$associacoes->where('idt_associacao', $idt_associacao)" />
+                    @endif
 
                     <flux:field>
                         <flux:label for="ofx_files" class="font-semibold text-zinc-700 dark:text-zinc-300">Selecione os arquivos OFX</flux:label>
@@ -363,6 +334,9 @@ new class extends Component {
                 <div class="flex items-center gap-3 pt-2">
                     <flux:button type="submit" variant="primary" class="px-5">
                         Processar Extrato
+                    </flux:button>
+                    <flux:button :href="route('orcamentos')" variant="outline" icon="document-duplicate" wire:navigate>
+                        Anexar Orçamentos (Débitos)
                     </flux:button>
                 </div>
             </form>

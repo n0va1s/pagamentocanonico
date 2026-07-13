@@ -194,14 +194,7 @@ new class extends Component {
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-8 items-start">
         <flux:card class="xl:col-span-2 space-y-6 border border-zinc-200 dark:border-zinc-700 shadow-sm rounded-xl">
             <form wire:submit="criarCampanha" class="space-y-6">
-                <flux:select wire:model.live="associacaoId" label="Associação Associada">
-                    <option value="">Selecione uma associação...</option>
-                    @foreach ($this->associacoes as $assoc)
-                        <option value="{{ $assoc->idt_associacao }}">
-                            {{ $assoc->nom_associacao }}
-                        </option>
-                    @endforeach
-                </flux:select>
+                <x-select-associacao wire:model.live="associacaoId" label="Associação Associada" placeholder="Selecione uma associação..." />
 
                 <flux:radio.group wire:model.live="tip_destinatario" label="Público-Alvo" variant="cards" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <flux:radio value="A" label="Todos" description="Envia diretamente aos contatos de todos os associados." />

@@ -98,16 +98,12 @@ new class extends Component {
             icon="envelope"
         />
         
-        <flux:select 
+        <x-select-associacao 
             label="Associação" 
             wire:model="idt_associacao" 
             placeholder="Selecione a associação..." 
             disabled
-        >
-            @foreach($associacoes as $assoc)
-                <flux:select.option value="{{ $assoc->idt_associacao }}">{{ $assoc->nom_associacao }}</flux:select.option>
-            @endforeach
-        </flux:select>
+        />
         <flux:textarea 
             label="Sua Mensagem" 
             wire:model="mensagem" 

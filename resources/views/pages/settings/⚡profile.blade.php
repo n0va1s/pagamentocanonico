@@ -151,7 +151,7 @@ new #[Title('Profile settings')] class extends Component {
     }
 }; ?>
 
-<section class="w-full">
+<section class="w-full space-y-6 p-6 max-w-7xl mx-auto">
     @include('partials.settings-heading')
 
     <flux:heading class="sr-only">{{ __('Profile settings') }}</flux:heading>
@@ -160,18 +160,12 @@ new #[Title('Profile settings')] class extends Component {
         <form wire:submit="updateProfileInformation" class="my-6 w-full space-y-6">
             @if ($hasMembro)
                 {{-- Associação --}}
-                <flux:select
+                <x-select-associacao
                     id="idt_associacao"
                     wire:model="idt_associacao"
                     label="Associação"
                     disabled
-                >
-                    @foreach(\App\Models\Associacao::orderBy('nom_associacao')->get() as $assoc)
-                        <flux:select.option value="{{ $assoc->idt_associacao }}">
-                            {{ $assoc->nom_associacao }}
-                        </flux:select.option>
-                    @endforeach
-                </flux:select>
+                />
 
                 {{-- CPF & Nome --}}
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
