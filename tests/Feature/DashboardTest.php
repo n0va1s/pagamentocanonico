@@ -51,8 +51,7 @@ test('approved member with pending payments sees debtor status on dashboard', fu
     $user->refresh();
     Resumo::factory()->create([
         'idt_ofx' => $ofx->idt_ofx,
-        'nom_pessoa' => $membro->nom_membro,
-        'num_cpf_pagador' => $membro->num_cpf_membro,
+        'idt_membro' => $membro->idt_membro,
         'ind_pago' => false,
         'val_total' => 150.00,
     ]);

@@ -143,21 +143,8 @@ new class extends Component {
             $isOverdue = false;
             if ($latestOfx) {
                 $isOverdue = Resumo::where('idt_ofx', $latestOfx->idt_ofx)
+                    ->where('idt_membro', $membro->idt_membro)
                     ->where('ind_pago', false)
-                    ->where(function($query) use ($membro) {
-                        $query->where(function($q) use ($membro) {
-                            if ($membro->num_cpf_membro) {
-                                $cleanCpf = preg_replace('/\D/', '', $membro->num_cpf_membro);
-                                $q->whereRaw("REPLACE(REPLACE(num_cpf_pagador, '.', ''), '-', '') = ?", [$cleanCpf]);
-                                if (strlen($cleanCpf) === 14 && str_starts_with($cleanCpf, '000')) {
-                                    $q->orWhereRaw("REPLACE(REPLACE(num_cpf_pagador, '.', ''), '-', '') = ?", [substr($cleanCpf, 3)]);
-                                }
-                            } else {
-                                $q->whereRaw("1 = 0");
-                            }
-                        })
-                        ->orWhere('nom_pessoa', $membro->nom_membro);
-                    })
                     ->exists();
             }
 

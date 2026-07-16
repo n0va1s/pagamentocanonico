@@ -28,6 +28,7 @@ class Membro extends Model
         'eml_membro',
         'tel_membro',
         'dat_nascimento',
+        'num_cep',
         'end_logradouro',
         'end_numero',
         'end_complemento',

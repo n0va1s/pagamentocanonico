@@ -18,6 +18,7 @@ new class extends Component {
     public string $tel_membro            = '';
 
     // Endereço
+    public string $num_cep               = '';
     public string $end_logradouro        = '';
     public string $end_numero            = '';
     public string $end_complemento       = '';
@@ -38,6 +39,7 @@ new class extends Component {
             $this->nom_apelido           = $membro->nom_apelido ?? '';
             $this->eml_membro            = $membro->eml_membro;
             $this->tel_membro            = $membro->tel_membro ?? '';
+            $this->num_cep               = $membro->num_cep ?? '';
             $this->end_logradouro        = $membro->end_logradouro ?? '';
             $this->end_numero            = $membro->end_numero ?? '';
             $this->end_complemento       = $membro->end_complemento ?? '';
@@ -68,6 +70,7 @@ new class extends Component {
             'nom_apelido'            => ['nullable', 'string', 'max:100'],
             'eml_membro'             => ['required', 'email', 'max:255', Rule::unique('membros', 'eml_membro')->ignore($ignorarId, 'idt_membro')],
             'tel_membro'             => ['nullable', 'string', 'max:20', new \App\Rules\Telefone],
+            'num_cep'                => ['nullable', 'string', 'max:10'],
             'end_logradouro'         => ['nullable', 'string', 'max:150'],
             'end_numero'             => ['nullable', 'string', 'max:20'],
             'end_complemento'        => ['nullable', 'string', 'max:150'],
@@ -132,78 +135,171 @@ new class extends Component {
 <div>
     <form wire:submit="salvar" class="space-y-6">
 
-        {{-- Dados Pessoais --}}
         <flux:card class="space-y-6">
-            <div>
-                <flux:heading size="sm">Dados Pessoais</flux:heading>
-            </div>
+            @if(auth()->user()->isAdmin())
+            <flux:field>
+                <flux:label required for="idt_associacao">Associação</flux:label>
+                <x-select-associacao id="idt_associacao" wire:model="idt_associacao" placeholder="Selecione..." />
+                <flux:error name="idt_associacao" />
+            </flux:field>
+            @endif
 
+            {{-- CPF & Nome --}}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-                <flux:field class="md:col-span-2">
-                    <flux:label required for="nom_membro">Nome completo</flux:label>
-                    <flux:input
-                        id="nom_membro"
-                        wire:model="nom_membro"
-                        placeholder="Ex: João Paulo Silva"
-                        autocomplete="off"
-                    />
-                    <flux:error name="nom_membro" />
-                </flux:field>
-
-                <flux:field class="md:col-span-2">
-                    <flux:label for="nom_apelido">Apelido</flux:label>
-                    <flux:input
-                        id="nom_apelido"
-                        wire:model="nom_apelido"
-                        placeholder="Ex: Joãozinho"
-                        autocomplete="off"
-                    />
-                    <flux:error name="nom_apelido" />
-                </flux:field>
-
-                <flux:field class="md:col-span-2">
-                    <flux:label required for="num_cpf_membro">CPF do membro</flux:label>
+                <flux:field>
+                    <flux:label required for="num_cpf_membro">CPF</flux:label>
                     <flux:input
                         id="num_cpf_membro"
                         wire:model="num_cpf_membro"
-                        placeholder="Ex: 000.000.000-00"
+                        type="text"
                         autocomplete="off"
+                        :disabled="$editando"
                     />
                     <flux:error name="num_cpf_membro" />
                 </flux:field>
 
                 <flux:field>
-                    <flux:label required for="eml_membro">E-mail</flux:label>
+                    <flux:label required for="nom_membro">Nome</flux:label>
                     <flux:input
-                        id="eml_membro"
-                        type="email"
-                        wire:model="eml_membro"
-                        placeholder="joao@email.com"
+                        id="nom_membro"
+                        wire:model="nom_membro"
+                        type="text"
                         autocomplete="off"
                     />
-                    <flux:error name="eml_membro" />
+                    <flux:error name="nom_membro" />
+                </flux:field>
+            </div>
+
+            {{-- Apelido --}}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <flux:field class="md:col-span-2">
+                    <flux:label for="nom_apelido">Apelido</flux:label>
+                    <flux:input
+                        id="nom_apelido"
+                        wire:model="nom_apelido"
+                        type="text"
+                        placeholder="Como é conhecido(a)"
+                        autocomplete="off"
+                    />
+                    <flux:error name="nom_apelido" />
+                </flux:field>
+            </div>
+
+            {{-- CEP & Endereço --}}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <flux:field>
+                    <flux:label for="num_cep">CEP</flux:label>
+                    <flux:input
+                        id="num_cep"
+                        wire:model="num_cep"
+                        type="text"
+                        mask="99999-999"
+                        placeholder="00000-000"
+                        x-on:blur="
+                            let cep = $el.value.replace(/\D/g, '');
+                            if (cep.length === 8) {
+                                fetch(`https://viacep.com.br/ws/${cep}/json/`)
+                                    .then(res => res.json())
+                                    .then(data => {
+                                        if (!data.erro) {
+                                            let address = data.logradouro;
+                                            if (data.bairro) address += ' - ' + data.bairro;
+                                            if (data.localidade) address += ' - ' + data.localidade + '/' + data.uf;
+                                            $wire.set('end_logradouro', address);
+                                        }
+                                    });
+                            }
+                        "
+                    />
+                    <flux:error name="num_cep" />
                 </flux:field>
 
                 <flux:field>
-                    <flux:label for="tel_membro">Telefone</flux:label>
+                    <flux:label for="end_logradouro">Endereço</flux:label>
+                    <flux:input
+                        id="end_logradouro"
+                        wire:model="end_logradouro"
+                        type="text"
+                        placeholder="Rua, Avenida, etc."
+                    />
+                    <flux:error name="end_logradouro" />
+                </flux:field>
+            </div>
+
+            {{-- Número & Complemento --}}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <flux:field>
+                    <flux:label for="end_numero">Número</flux:label>
+                    <flux:input
+                        id="end_numero"
+                        wire:model="end_numero"
+                        type="text"
+                        placeholder="Nº"
+                        x-on:input="
+                            let val = $el.value;
+                            if (/[a-zA-Z]/.test(val)) {
+                                let numbers = val.replace(/[^0-9]/g, '');
+                                let letters = val.replace(/[^a-zA-Z]/g, '');
+                                $el.value = numbers;
+                                $wire.set('end_numero', numbers);
+                                
+                                let lotInfo = 'Lote ' + letters.toUpperCase();
+                                let compVal = $wire.get('end_complemento') || '';
+                                if (compVal.trim() === '') {
+                                    $wire.set('end_complemento', lotInfo);
+                                } else if (!compVal.includes(lotInfo)) {
+                                    $wire.set('end_complemento', compVal.trim() + ' ' + lotInfo);
+                                }
+                            } else {
+                                let numbers = val.replace(/[^0-9]/g, '');
+                                $el.value = numbers;
+                                $wire.set('end_numero', numbers);
+                            }
+                        "
+                    />
+                    <flux:error name="end_numero" />
+                </flux:field>
+
+                <flux:field>
+                    <flux:label for="end_complemento">Complemento</flux:label>
+                    <flux:input
+                        id="end_complemento"
+                        wire:model="end_complemento"
+                        type="text"
+                        placeholder="Apto, Bloco, etc."
+                    />
+                    <flux:error name="end_complemento" />
+                </flux:field>
+            </div>
+
+            {{-- Celular & Email --}}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <flux:field>
+                    <flux:label for="tel_membro">Celular</flux:label>
                     <flux:input
                         id="tel_membro"
                         wire:model="tel_membro"
-                        placeholder="(11) 99999-9999"
+                        type="text"
+                        mask="(99) 99999-9999"
+                        placeholder="(61) 99999-9999"
                     />
                     <flux:error name="tel_membro" />
                 </flux:field>
 
-                @if(auth()->user()->isAdmin())
                 <flux:field>
-                    <flux:label required for="idt_associacao">Associação</flux:label>
-                    <x-select-associacao id="idt_associacao" wire:model="idt_associacao" placeholder="Selecione..." />
-                    <flux:error name="idt_associacao" />
+                    <flux:label required for="eml_membro">Email</flux:label>
+                    <flux:input
+                        id="eml_membro"
+                        type="email"
+                        wire:model="eml_membro"
+                        autocomplete="off"
+                    />
+                    <flux:error name="eml_membro" />
                 </flux:field>
-                @endif
+            </div>
 
-                @if($editando)
+            @if($editando)
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <flux:field>
                     <flux:label required for="tip_associado">Tipo de associação</flux:label>
                     <flux:select id="tip_associado" wire:model="tip_associado">
@@ -216,50 +312,9 @@ new class extends Component {
                     </flux:select>
                     <flux:error name="tip_associado" />
                 </flux:field>
-                @endif
-
             </div>
-        </flux:card>
+            @endif
 
-        {{-- Endereço --}}
-        <flux:card class="space-y-6">
-            <div>
-                <flux:heading size="sm">Endereço</flux:heading>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-                <flux:field class="md:col-span-2">
-                    <flux:label for="end_logradouro">Logradouro</flux:label>
-                    <flux:input
-                        id="end_logradouro"
-                        wire:model="end_logradouro"
-                        placeholder="Rua das Flores"
-                    />
-                    <flux:error name="end_logradouro" />
-                </flux:field>
-
-                <flux:field>
-                    <flux:label for="end_numero">Número</flux:label>
-                    <flux:input
-                        id="end_numero"
-                        wire:model="end_numero"
-                        placeholder="123"
-                    />
-                    <flux:error name="end_numero" />
-                </flux:field>
-
-                <flux:field class="md:col-span-3">
-                    <flux:label for="end_complemento">Complemento / Bairro</flux:label>
-                    <flux:input
-                        id="end_complemento"
-                        wire:model="end_complemento"
-                        placeholder="Apto 42 - Jardim Primavera"
-                    />
-                    <flux:error name="end_complemento" />
-                </flux:field>
-
-            </div>
         </flux:card>
 
 

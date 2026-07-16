@@ -9,7 +9,6 @@ use Livewire\Volt\Component;
 use Livewire\Attributes\Title;
 
 new #[Title('Dashboard')] class extends Component {
-    // Admin/Director properties
     public ?int $selectedImportId = null;
     public $selectedAssociacaoId = null;
 
@@ -158,20 +157,7 @@ new #[Title('Dashboard')] class extends Component {
             $resumosPendentes = collect();
             $resumosRegularizados = collect();
             if ($membro) {
-                $todosResumos = Resumo::where(function ($query) use ($membro) {
-                    $query->where(function($q) use ($membro) {
-                        if ($membro->num_cpf_membro) {
-                            $cleanCpf = preg_replace('/\D/', '', $membro->num_cpf_membro);
-                            $q->whereRaw("REPLACE(REPLACE(num_cpf_pagador, '.', ''), '-', '') = ?", [$cleanCpf]);
-                            if (strlen($cleanCpf) === 14 && str_starts_with($cleanCpf, '000')) {
-                                $q->orWhereRaw("REPLACE(REPLACE(num_cpf_pagador, '.', ''), '-', '') = ?", [substr($cleanCpf, 3)]);
-                            }
-                        } else {
-                            $q->whereRaw("1 = 0");
-                        }
-                    })
-                    ->orWhere('nom_pessoa', $membro->nom_membro);
-                })
+                $todosResumos = Resumo::where('idt_membro', $membro->idt_membro)
                 ->orderByDesc('num_ano')
                 ->orderByDesc('num_mes')
                 ->get();
@@ -205,55 +191,70 @@ new #[Title('Dashboard')] class extends Component {
 
         if ($isAdminDashboard) {
             // Lógica do Dashboard Global para Admin
+            
+            $importacoes = Ofx::withoutGlobalScope('associacao')->latest();
+            if ($this->selectedAssociacaoId) {
+                $importacoes->where('idt_associacao', $this->selectedAssociacaoId);
+            }
+            $importacoes = $importacoes->get();
+            
+            $transacoesQuery = Transacao::query();
+            if ($this->selectedAssociacaoId) {
+                $transacoesQuery->whereHas('ofx', function($q) {
+                    $q->withoutGlobalScope('associacao')->where('idt_associacao', $this->selectedAssociacaoId);
+                });
+            } else {
+                $transacoesQuery->whereHas('ofx', function($q) {
+                    $q->withoutGlobalScope('associacao');
+                });
+            }
+
+            if ($this->selectedImportId) {
+                $transacoesQuery->where('idt_ofx', $this->selectedImportId);
+            }
+
+            $cloneCreditos = clone $transacoesQuery;
+            $cloneDebitos = clone $transacoesQuery;
+            $clonePendentes = clone $transacoesQuery;
+
+            $valoresRecebidos = (float) $cloneCreditos->where('tip_transacao', 'CREDIT')->sum('val_transacao');
+            $valoresPagos = abs((float) $cloneDebitos->where('tip_transacao', 'DEBIT')->sum('val_transacao'));
+            $valoresPendentes = (float) $clonePendentes->where('tip_transacao', 'CREDIT')->whereNull('idt_membro')->sum('val_transacao');
+
             $membrosQuery = Membro::withoutGlobalScope('associacao')->with('associacao')->where('ind_aprovado', true);
             if ($this->selectedAssociacaoId) {
                 $membrosQuery->where('idt_associacao', $this->selectedAssociacaoId);
             }
             $membros = $membrosQuery->get();
             $totalMembrosAtivos = $membros->count();
+            
+            $valorEsperado = $membros->sum(fn($m) => $m->associacao?->val_taxa ?? 0);
 
-            $recebidoQuery = Resumo::withoutGlobalScope('associacao')->where('ind_pago', true);
-            if ($this->selectedAssociacaoId) {
-                $recebidoQuery->whereHas('ofx', function($q) {
-                    $q->withoutGlobalScope('associacao')->where('idt_associacao', $this->selectedAssociacaoId);
-                });
-            }
-            $totalRecebido = (float) $recebidoQuery->sum('val_total');
-
-            $inadimplentesQuery = Resumo::withoutGlobalScope('associacao')->where('ind_pago', false);
-            if ($this->selectedAssociacaoId) {
-                $inadimplentesQuery->whereHas('ofx', function($q) {
-                    $q->withoutGlobalScope('associacao')->where('idt_associacao', $this->selectedAssociacaoId);
-                });
-            }
-            $resumosInadimplentes = $inadimplentesQuery->get();
-
-            foreach ($membros as $m) {
-                $isDebtor = false;
-
-                if ($m->num_cpf_membro) {
-                    $cleanCpf = preg_replace('/\D/', '', $m->num_cpf_membro);
-                    $isDebtor = $resumosInadimplentes->contains(function ($r) use ($cleanCpf) {
-                        $rcpf = preg_replace('/\D/', '', $r->num_cpf_pagador ?? '');
-                        if ($rcpf === $cleanCpf) {
-                            return true;
-                        }
-                        if (strlen($rcpf) === 14 && str_starts_with($rcpf, '000') && substr($rcpf, 3) === $cleanCpf) {
-                            return true;
-                        }
-                        return false;
+            if ($this->selectedImportId) {
+                $pagosIds = Resumo::withoutGlobalScope('associacao')
+                    ->where('idt_ofx', $this->selectedImportId)
+                    ->where('ind_pago', true)
+                    ->pluck('idt_membro')
+                    ->filter()
+                    ->toArray();
+                
+                $totalAdimplentes = count(array_unique($pagosIds));
+                $totalInadimplentes = $totalMembrosAtivos - $totalAdimplentes;
+            } else {
+                // If no OFX is selected, check who has AT LEAST ONE unpaid Resumo
+                $inadimplentesQuery = Resumo::withoutGlobalScope('associacao')->where('ind_pago', false);
+                if ($this->selectedAssociacaoId) {
+                    $inadimplentesQuery->whereHas('ofx', function($q) {
+                        $q->withoutGlobalScope('associacao')->where('idt_associacao', $this->selectedAssociacaoId);
                     });
                 }
-
-                if (!$isDebtor) {
-                    $isDebtor = $resumosInadimplentes->contains('nom_pessoa', $m->nom_membro);
-                }
-
-                if ($isDebtor) {
-                    $totalInadimplentes++;
-                    $valorRecuperar += $m->associacao?->val_taxa ?? 0;
-                } else {
-                    $totalAdimplentes++;
+                $resumosInadimplentes = $inadimplentesQuery->get();
+                $totalInadimplentes = 0;
+                
+                foreach ($membros as $m) {
+                    if ($resumosInadimplentes->contains('idt_membro', $m->idt_membro)) {
+                        $totalInadimplentes++;
+                    }
                 }
             }
 
@@ -261,16 +262,17 @@ new #[Title('Dashboard')] class extends Component {
                 'isMembroDashboard' => false,
                 'isAdminDashboard' => true,
                 'isDiretor' => false,
-                'importacoes' => collect(),
+                'importacoes' => $importacoes,
                 'importacaoSelecionada' => null,
                 'dadosDashboard' => [],
                 'mesesDisponiveis' => collect(),
-                'totalRecebido' => $totalRecebido,
-                'valorRecuperar' => $valorRecuperar,
-                'totalAdimplentes' => $totalAdimplentes,
+                'totalAdimplentes' => $totalAdimplentes ?? 0,
                 'totalInadimplentes' => $totalInadimplentes,
                 'totalMembrosAtivos' => $totalMembrosAtivos,
-                'totalAssociacoes' => $totalAssociacoes,
+                'valoresRecebidos' => $valoresRecebidos,
+                'valoresPagos' => $valoresPagos,
+                'valoresPendentes' => $valoresPendentes,
+                'valorEsperado' => $valorEsperado,
                 'allAssociacoes' => $allAssociacoes,
             ];
         }
@@ -296,29 +298,11 @@ new #[Title('Dashboard')] class extends Component {
                 ->sortBy(['num_ano', 'num_mes'])
                 ->values();
 
-            $porPessoa = $resumos->groupBy('nom_pessoa');
+            $porPessoa = $resumos->groupBy('idt_membro');
 
-            foreach ($porPessoa as $nomePessoa => $resumosPessoa) {
-                $cpf = $resumosPessoa->first()->num_cpf_pagador;
-                $membro = null;
-
-                if (!empty($cpf)) {
-                    $cleanCpf = preg_replace('/\D/', '', $cpf);
-                    $membro = Membro::with('associacao')
-                        ->whereRaw("REPLACE(REPLACE(num_cpf_membro, '.', ''), '-', '') = ?", [$cleanCpf])
-                        ->first();
-                    if (!$membro && strlen($cleanCpf) === 14 && str_starts_with($cleanCpf, '000')) {
-                        $membro = Membro::with('associacao')
-                            ->whereRaw("REPLACE(REPLACE(num_cpf_membro, '.', ''), '-', '') = ?", [substr($cleanCpf, 3)])
-                            ->first();
-                    }
-                }
-
-                if (!$membro) {
-                    $membro = Membro::with('associacao')
-                        ->where('nom_membro', $nomePessoa)
-                        ->first();
-                }
+            foreach ($porPessoa as $membroId => $resumosPessoa) {
+                $membro = $membroId ? Membro::with('associacao')->find($membroId) : null;
+                $nomePessoa = $membro ? $membro->nom_membro : 'Transações Avulsas / Não Identificadas';
 
                 $linha = [
                     'nome' => $nomePessoa,
@@ -650,6 +634,20 @@ new #[Title('Dashboard')] class extends Component {
                                 <x-select-associacao wire:model.live="selectedAssociacaoId" class="w-full sm:w-64" disabled :associacoes="$allAssociacoes" />
                             @endif
                         </div>
+                        
+                        <div class="flex items-center gap-3 w-full sm:w-auto mt-4 sm:mt-0 sm:ml-4 border-t sm:border-t-0 sm:border-l border-neutral-200 dark:border-neutral-700 pt-4 sm:pt-0 sm:pl-4">
+                            <div class="flex flex-col gap-1 w-full sm:w-64">
+                                <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Arquivo OFX (Período)</p>
+                                <flux:select wire:model.live="selectedImportId" class="w-full">
+                                    <flux:select.option value="">Todos os Períodos</flux:select.option>
+                                    @foreach($importacoes as $ofx)
+                                        <flux:select.option value="{{ $ofx->idt_ofx }}">
+                                            {{ $ofx->des_arquivo }}
+                                        </flux:select.option>
+                                    @endforeach
+                                </flux:select>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -687,10 +685,31 @@ new #[Title('Dashboard')] class extends Component {
                 @if($isAdminDashboard)
                 <div class="grid auto-rows-min gap-4 md:grid-cols-3 lg:grid-cols-6">
                     <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
-                        <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Associações Cadastradas</p>
+                        <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Valores Recebidos</p>
                         <div class="flex w-full items-center justify-between">
-                            <p class="text-xl font-bold text-blue-600">{{ $totalAssociacoes }}</p>
-                            <flux:icon name="building-office-2" class="size-5 text-blue-500 opacity-60" />
+                            <p class="text-lg font-bold text-green-600">R$ {{ number_format($valoresRecebidos, 2, ',', '.') }}</p>
+                            <flux:icon name="arrow-trending-up" class="size-5 text-green-500 opacity-60" />
+                        </div>
+                    </flux:card>
+                    <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
+                        <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Valores Pagos</p>
+                        <div class="flex w-full items-center justify-between">
+                            <p class="text-lg font-bold text-red-600">R$ {{ number_format($valoresPagos, 2, ',', '.') }}</p>
+                            <flux:icon name="arrow-trending-down" class="size-5 text-red-500 opacity-60" />
+                        </div>
+                    </flux:card>
+                    <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
+                        <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Valores Pendentes</p>
+                        <div class="flex w-full items-center justify-between">
+                            <p class="text-lg font-bold text-orange-500">R$ {{ number_format($valoresPendentes, 2, ',', '.') }}</p>
+                            <flux:icon name="exclamation-circle" class="size-5 text-orange-400 opacity-60" />
+                        </div>
+                    </flux:card>
+                    <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
+                        <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Valor Esperado</p>
+                        <div class="flex w-full items-center justify-between">
+                            <p class="text-lg font-bold text-blue-600">R$ {{ number_format($valorEsperado, 2, ',', '.') }}</p>
+                            <flux:icon name="banknotes" class="size-5 text-blue-500 opacity-60" />
                         </div>
                     </flux:card>
                     <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
@@ -701,31 +720,10 @@ new #[Title('Dashboard')] class extends Component {
                         </div>
                     </flux:card>
                     <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
-                        <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Membros Adimplentes</p>
-                        <div class="flex w-full items-center justify-between">
-                            <p class="text-xl font-bold text-green-600">{{ $totalAdimplentes }}</p>
-                            <flux:icon name="check-circle" class="size-5 text-green-500 opacity-60" />
-                        </div>
-                    </flux:card>
-                    <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
                         <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Membros Inadimplentes</p>
                         <div class="flex w-full items-center justify-between">
                             <p class="text-xl font-bold text-red-600">{{ $totalInadimplentes }}</p>
-                            <flux:icon name="exclamation-triangle" class="size-5 text-red-500 opacity-60" />
-                        </div>
-                    </flux:card>
-                    <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
-                        <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Valor Transacionado</p>
-                        <div class="flex w-full items-center justify-between">
-                            <p class="text-lg font-bold text-neutral-800 dark:text-neutral-100">R$ {{ number_format($totalRecebido,2,',','.') }}</p>
-                            <flux:icon name="banknotes" class="size-5 text-neutral-500 opacity-60" />
-                        </div>
-                    </flux:card>
-                    <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
-                        <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Valor a Recuperar</p>
-                        <div class="flex w-full items-center justify-between">
-                            <p class="text-lg font-bold text-orange-600">R$ {{ number_format($valorRecuperar,2,',','.') }}</p>
-                            <flux:icon name="arrow-trending-down" class="size-5 text-orange-500 opacity-60" />
+                            <flux:icon name="x-circle" class="size-5 text-red-500 opacity-60" />
                         </div>
                     </flux:card>
                 </div>

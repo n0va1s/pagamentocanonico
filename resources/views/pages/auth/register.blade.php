@@ -38,7 +38,7 @@
                 />
             </div>
 
-            <!-- Apelido & Endereço -->
+            <!-- Apelido -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <flux:input
                     name="nom_apelido"
@@ -46,8 +46,39 @@
                     :value="old('nom_apelido')"
                     type="text"
                     placeholder="Como é conhecido(a)"
+                    class="md:col-span-2"
+                />
+            </div>
+
+            <!-- CEP & Endereço -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <flux:input
+                    id="num_cep"
+                    name="num_cep"
+                    label="CEP"
+                    :value="old('num_cep')"
+                    type="text"
+                    mask="99999-999"
+                    placeholder="00000-000"
+                    x-on:blur="
+                        let cep = $el.value.replace(/\D/g, '');
+                        if (cep.length === 8) {
+                            fetch(`https://viacep.com.br/ws/${cep}/json/`)
+                                .then(res => res.json())
+                                .then(data => {
+                                    if (!data.erro) {
+                                        let address = data.logradouro;
+                                        if (data.bairro) address += ' - ' + data.bairro;
+                                        if (data.localidade) address += ' - ' + data.localidade + '/' + data.uf;
+                                        let logradouroInput = document.getElementById('end_logradouro');
+                                        if (logradouroInput) logradouroInput.value = address;
+                                    }
+                                });
+                        }
+                    "
                 />
                 <flux:input
+                    id="end_logradouro"
                     name="end_logradouro"
                     label="Endereço"
                     :value="old('end_logradouro')"

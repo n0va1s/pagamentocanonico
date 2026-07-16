@@ -23,25 +23,46 @@ class OfxParserService
     {
         $conteudo = $this->lerArquivo($caminhoArquivo);
 
-        $ofx = Ofx::create([
-            'idt_associacao' => $idtAssociacao,
-            'des_arquivo' => $nomeOriginal,
-            'cod_banco' => $this->extrairTag($conteudo, 'BANKID'),
-            'num_conta' => $this->extrairTag($conteudo, 'ACCTID'),
-            'dat_inicio' => $this->converterDataOfx($this->extrairTag($conteudo, 'DTSTART')),
-            'dat_fim' => $this->converterDataOfx($this->extrairTag($conteudo, 'DTEND')),
-            'qtd_transacao' => 0,
-            'val_total' => 0,
-        ]);
+        $codBanco = $this->extrairTag($conteudo, 'BANKID');
+        $numConta = $this->extrairTag($conteudo, 'ACCTID');
+        $datInicio = $this->converterDataOfx($this->extrairTag($conteudo, 'DTSTART'));
+        $datFim = $this->converterDataOfx($this->extrairTag($conteudo, 'DTEND'));
+
+        // Busca OFX existente pela chave lógica (conta e período)
+        $ofx = Ofx::where('idt_associacao', $idtAssociacao)
+            ->where('num_conta', $numConta)
+            ->where('dat_inicio', $datInicio)
+            ->where('dat_fim', $datFim)
+            ->first();
+
+        if (!$ofx) {
+            $ofx = Ofx::create([
+                'idt_associacao' => $idtAssociacao,
+                'des_arquivo' => $nomeOriginal,
+                'cod_banco' => $codBanco,
+                'num_conta' => $numConta,
+                'dat_inicio' => $datInicio,
+                'dat_fim' => $datFim,
+                'qtd_transacao' => 0,
+                'val_total' => 0,
+            ]);
+        } else {
+            // Atualiza o nome do arquivo para o mais recente
+            $ofx->update(['des_arquivo' => $nomeOriginal]);
+        }
 
         DB::beginTransaction();
 
         try {
-            $totais = $this->salvarTransacoes($ofx, $conteudo);
+            $this->salvarTransacoes($ofx, $conteudo);
+
+            // Recalcula os totais direto do banco (evita zerar se reimportar arquivo já existente)
+            $qtd = Transacao::where('idt_ofx', $ofx->idt_ofx)->count();
+            $val = Transacao::where('idt_ofx', $ofx->idt_ofx)->where('tip_transacao', 'CREDIT')->sum('val_transacao');
 
             $ofx->update([
-                'qtd_transacao' => $totais['quantidade'],
-                'val_total' => $totais['valor_total'],
+                'qtd_transacao' => $qtd,
+                'val_total' => (float) $val,
             ]);
 
             $this->gerarResumosMensais($ofx);
@@ -113,7 +134,12 @@ class OfxParserService
             $cpf = $this->extrairCpfDoMemo($bloco['MEMO'] ?? null);
             $membro = null;
             if ($cpf) {
-                $membro = \App\Models\Membro::where('num_cpf', $cpf)->first();
+                $membro = \App\Models\Membro::where(function($query) use ($cpf) {
+                    $query->whereRaw("REPLACE(REPLACE(num_cpf_membro, '.', ''), '-', '') = ?", [$cpf]);
+                    if (strlen($cpf) === 14 && str_starts_with($cpf, '000')) {
+                        $query->orWhereRaw("REPLACE(REPLACE(num_cpf_membro, '.', ''), '-', '') = ?", [substr($cpf, 3)]);
+                    }
+                })->first();
             }
 
             Transacao::create([
@@ -150,7 +176,7 @@ class OfxParserService
             ->get();
 
         $porPessoa = $transacoes->groupBy(function ($t) {
-            return $t->idt_membro ? 'membro_' . $t->idt_membro : 'nome_' . $t->nom_pessoa;
+            return $t->idt_membro ? 'membro_' . $t->idt_membro : 'nome_' . $t->des_transacao;
         });
 
         foreach ($porPessoa as $chave => $transacoesPessoa) {
@@ -169,6 +195,8 @@ class OfxParserService
                 $indPago = false;
                 if ($total > 0) {
                     if (($valTaxa > 0 && $total >= $valTaxa) || ($valAnual > 0 && $total >= $valAnual)) {
+                        $indPago = true;
+                    } elseif ($valTaxa <= 0 && $valAnual <= 0) {
                         $indPago = true;
                     }
                 }

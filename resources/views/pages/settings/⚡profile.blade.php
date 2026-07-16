@@ -16,6 +16,7 @@ new #[Title('Profile settings')] class extends Component {
 
     // Membro properties
     public string $num_cpf_membro = '';
+    public string $num_cep = '';
     public string $nom_apelido = '';
     public string $tel_membro = '';
     public string $end_logradouro = '';
@@ -37,6 +38,7 @@ new #[Title('Profile settings')] class extends Component {
         if ($membro) {
             $this->hasMembro = true;
             $this->num_cpf_membro = $membro->num_cpf_membro ?? '';
+            $this->num_cep = $membro->num_cep ?? '';
             $this->nom_apelido = $membro->nom_apelido ?? '';
             $this->tel_membro = $membro->tel_membro ?? '';
             $this->end_logradouro = $membro->end_logradouro ?? '';
@@ -57,6 +59,7 @@ new #[Title('Profile settings')] class extends Component {
 
         if ($this->hasMembro) {
             $rules['nom_apelido'] = ['nullable', 'string', 'max:100'];
+            $rules['num_cep'] = ['nullable', 'string', 'max:10'];
             $rules['tel_membro'] = ['nullable', 'string', 'max:20'];
             $rules['end_logradouro'] = ['nullable', 'string', 'max:150'];
             $rules['end_numero'] = ['nullable', 'string', 'max:20'];
@@ -109,6 +112,7 @@ new #[Title('Profile settings')] class extends Component {
                 'nom_membro' => $user->name,
                 'eml_membro' => $user->email,
                 'nom_apelido' => $this->nom_apelido ?: null,
+                'num_cep' => $this->num_cep ?: null,
                 'tel_membro' => $this->tel_membro ?: null,
                 'end_logradouro' => $this->end_logradouro ?: null,
                 'end_numero' => $numero,
@@ -173,9 +177,38 @@ new #[Title('Profile settings')] class extends Component {
                     <flux:input wire:model="name" :label="__('Nome')" type="text" required autofocus autocomplete="name" />
                 </div>
 
-                {{-- Apelido & Endereço --}}
+                {{-- Apelido --}}
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <flux:input wire:model="nom_apelido" label="Apelido" type="text" placeholder="Seu apelido" />
+                    <flux:field class="md:col-span-2">
+                        <flux:label for="nom_apelido">Apelido</flux:label>
+                        <flux:input wire:model="nom_apelido" type="text" placeholder="Seu apelido" />
+                    </flux:field>
+                </div>
+
+                {{-- CEP & Endereço --}}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <flux:input 
+                        wire:model="num_cep" 
+                        label="CEP" 
+                        type="text" 
+                        mask="99999-999" 
+                        placeholder="00000-000"
+                        x-on:blur="
+                            let cep = $el.value.replace(/\D/g, '');
+                            if (cep.length === 8) {
+                                fetch(`https://viacep.com.br/ws/${cep}/json/`)
+                                    .then(res => res.json())
+                                    .then(data => {
+                                        if (!data.erro) {
+                                            let address = data.logradouro;
+                                            if (data.bairro) address += ' - ' + data.bairro;
+                                            if (data.localidade) address += ' - ' + data.localidade + '/' + data.uf;
+                                            $wire.set('end_logradouro', address);
+                                        }
+                                    });
+                            }
+                        " 
+                    />
                     <flux:input wire:model="end_logradouro" label="Endereço" type="text" placeholder="Rua, Avenida, etc." />
                 </div>
 

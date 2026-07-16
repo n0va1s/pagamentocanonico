@@ -23,12 +23,12 @@ class ResumoFactory extends Factory
 
         return [
             'idt_ofx' => Ofx::factory(),
-            'nom_pessoa' => fake('pt_BR')->name(),
+            'idt_membro' => null,
             'num_ano' => fake()->numberBetween(2024, 2026),
             'num_mes' => $mes,
             'nom_mes' => $nomesMeses[$mes],
             'val_total' => $total,
-            'num_transacao' => fake()->numberBetween(1, 10),
+            'qtd_transacao' => fake()->numberBetween(1, 10),
             'ind_pago' => $total > 0,
         ];
     }

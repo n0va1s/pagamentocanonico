@@ -16,6 +16,7 @@ return new class extends Migration
             $table->string('eml_membro')->unique();
             $table->string('tel_membro', 20)->nullable();
             $table->date('dat_nascimento')->nullable();
+            $table->string('num_cep', 10)->nullable();               // CEP
             $table->string('end_logradouro', 150)->nullable();       // Bairro/Complemento
             $table->string('end_numero', 20)->nullable();            // Número/Apartamento
             $table->string('end_complemento', 150)->nullable();      // Rua/Avenida

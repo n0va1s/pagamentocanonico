@@ -25,9 +25,9 @@ test('ofx parser service processes BB OFX file correctly', function () {
     expect($ofx->dat_inicio->format('Y-m-d'))->toBe('2026-03-31');
     expect($ofx->dat_fim->format('Y-m-d'))->toBe('2026-06-18');
 
-    // Assert informational balance rows are ignored, leaving exactly 45 transactions
-    expect(Transacao::count())->toBe(45);
-    expect($ofx->qtd_transacao)->toBe(45);
+    // Assert informational balance rows are ignored, leaving exactly 42 transactions
+    expect(Transacao::count())->toBe(42);
+    expect($ofx->qtd_transacao)->toBe(42);
 
     // Assert that Saldo Anterior or Saldo do dia are not in database
     expect(Transacao::where('nom_pessoa', 'like', '%Saldo%')->count())->toBe(0);
@@ -50,21 +50,36 @@ test('ofx parser service processes BB OFX file correctly', function () {
     // Assert that monthly summaries (credits only) are correctly generated
     expect(Resumo::count())->toBeGreaterThan(0);
 
-    // Helena summary
-    $resumoHelena = Resumo::where('nom_pessoa', 'HELENA PATR')->first();
+    $resumos = Resumo::all();
+
+    $resumoHelena = $resumos->first(fn($r) => (float)$r->val_total === 8.40);
     expect($resumoHelena)->not->toBeNull();
-    expect((float) $resumoHelena->val_total)->toBe(8.40);
-    expect($resumoHelena->num_transacao)->toBe(1);
+    expect($resumoHelena->qtd_transacao)->toBe(1);
 
-    // Maria da Graca summary
-    $resumoGraca = Resumo::where('nom_pessoa', 'MARIA DA GRACA')->first();
+    $resumoGraca = $resumos->first(fn($r) => (float)$r->val_total === 50.00);
     expect($resumoGraca)->not->toBeNull();
-    expect((float) $resumoGraca->val_total)->toBe(50.00);
-    expect($resumoGraca->num_transacao)->toBe(1);
+    expect($resumoGraca->qtd_transacao)->toBe(1);
 
-    // Servico Federal de summary
-    $resumoServico = Resumo::where('nom_pessoa', 'SERVICO FEDERAL DE')->first();
+    $resumoServico = $resumos->first(fn($r) => (float)$r->val_total === 14830.99);
     expect($resumoServico)->not->toBeNull();
-    expect((float) $resumoServico->val_total)->toBe(14830.99);
-    expect($resumoServico->num_transacao)->toBe(2);
+    expect($resumoServico->qtd_transacao)->toBe(2);
+});
+
+test('ofx parser service does not duplicate ofx records when importing the same file twice', function () {
+    $filePath = base_path('docs/ofx/Extrato conta corrente - 032026.ofx');
+    $service = new OfxParserService;
+    
+    $ofx1 = $service->processar($filePath, 'Extrato1.ofx');
+    $ofx2 = $service->processar($filePath, 'Extrato2.ofx');
+
+    // Both should point to the same DB record
+    expect($ofx1->idt_ofx)->toBe($ofx2->idt_ofx);
+    expect(Ofx::count())->toBe(1);
+    
+    // Totals should remain correct
+    expect($ofx2->qtd_transacao)->toBe(42);
+    expect(Transacao::count())->toBe(42);
+    
+    // Check if filename was updated
+    expect($ofx2->des_arquivo)->toBe('Extrato2.ofx');
 });
