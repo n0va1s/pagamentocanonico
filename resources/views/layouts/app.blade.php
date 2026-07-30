@@ -4,7 +4,12 @@
         @include('partials.head')
     </head>
     <body class="min-h-screen bg-white dark:bg-zinc-800">
-        <flux:header container class="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
+        <!-- Skip link para acessibilidade WCAG 2.2 AA -->
+        <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-indigo-600 focus:text-white focus:rounded-md focus:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 font-medium">
+            {{ __('Pular para o conteúdo principal') }}
+        </a>
+
+        <flux:header container class="top-nav hidden sm:flex border-b border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
             <flux:sidebar.toggle class="lg:hidden mr-2" icon="bars-2" inset="left" />
 
             <div class="flex items-center gap-2 max-lg:hidden">
@@ -51,14 +56,14 @@
             <x-desktop-user-menu />
         </flux:header>
 
-        <!-- Mobile Menu -->
+        <!-- Mobile Menu Sidebar (opcional / fallback para telas médias/grandes) -->
         <flux:sidebar collapsible="mobile" sticky class="lg:hidden border-e border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
             <flux:sidebar.header>
                 <div class="flex items-center gap-2">
                     <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm">
                         <flux:icon name="chart-bar" class="size-4" />
                     </div>
-                    <span class="font-bold text-zinc-800 dark:text-white text-sm">Pagamento - Canônico<span>
+                    <span class="font-bold text-zinc-800 dark:text-white text-sm">Pagamento - Canônico</span>
                 </div>
                 <flux:sidebar.collapse class="in-data-flux-sidebar-on-desktop:not-in-data-flux-sidebar-collapsed-desktop:-mr-2" />
             </flux:sidebar.header>
@@ -104,7 +109,11 @@
             <flux:spacer />
         </flux:sidebar>
 
-        {{ $slot }}
+        <main id="main-content" class="pb-20 sm:pb-6">
+            {{ $slot }}
+        </main>
+
+        <livewire:layout.bottom-navigation />
 
         @persist('toast')
             <flux:toast.group>

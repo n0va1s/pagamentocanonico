@@ -61,6 +61,24 @@ select:focus[data-flux-control] {
     @apply outline-hidden ring-2 ring-accent ring-offset-2 ring-offset-accent-foreground;
 }
 
+*:focus-visible {
+    outline: 3px solid #4F46E5 !important;
+    outline-offset: 2px !important;
+}
+
+@media (forced-colors: active) {
+    *:focus-visible {
+        outline: 3px solid CanvasText !important;
+        outline-offset: 2px !important;
+    }
+    
+    .fixed.bottom-0 {
+        border-top: 2px solid CanvasText !important;
+    }
+}
+
+
+
 /* \[:where(&)\]:size-4 {
     @apply size-4;
 } */
