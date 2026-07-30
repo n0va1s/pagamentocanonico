@@ -25,7 +25,7 @@ class DatabaseSeeder extends Seeder
 
         // Create Admin (no member needed)
         User::firstOrCreate(
-            ['email' => 'admin@example.com'],
+            ['email' => 'admin@email.com'],
             [
                 'name' => 'Admin User',
                 'password' => Hash::make('localhost@1'),
