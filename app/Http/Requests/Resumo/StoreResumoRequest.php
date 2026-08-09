@@ -15,7 +15,6 @@ class StoreResumoRequest extends FormRequest
     {
         return [
             'idt_ofx' => ['required', 'integer', 'exists:ofx,idt_ofx'],
-            'nom_pessoa' => ['required', 'string', 'max:255'],
             'num_ano' => ['required', 'integer', 'min:2000', 'max:2100'],
             'num_mes' => ['required', 'integer', 'min:1', 'max:12'],
             'nom_mes' => ['required', 'string', 'max:10'],
