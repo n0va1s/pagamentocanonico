@@ -11,6 +11,7 @@ use Livewire\Attributes\Title;
 new #[Title('Dashboard')] class extends Component {
     public ?int $selectedImportId = null;
     public $selectedAssociacaoId = null;
+    public ?int $selectedYear = null;
 
     // Member properties
     public string $activeTab = 'pagamentos';
@@ -278,71 +279,222 @@ new #[Title('Dashboard')] class extends Component {
         }
 
         // Lógica do Dashboard Diretor (Por OFX)
-        $importacoes = Ofx::latest()->get();
+        // Lógica do Dashboard Diretor (Por Ano)
+        $this->selectedYear = $this->selectedYear ?? (int) date('Y');
+        $selectedYear = $this->selectedYear;
 
-        $importacaoSelecionada = null;
-        if ($this->selectedImportId) {
-            $importacaoSelecionada = Ofx::with('resumos')->find($this->selectedImportId);
-        } else {
-            $importacaoSelecionada = $importacoes->first();
+        $resumos = Resumo::where('num_ano', $selectedYear)->get();
+
+        $dadosDashboard = [];
+        $mesesDisponiveis = collect();
+        $totaisPorMes = [];
+
+        $nomesMeses = [
+            1 => 'Janeiro', 2 => 'Fevereiro', 3 => 'Março', 4 => 'Abril',
+            5 => 'Maio', 6 => 'Junho', 7 => 'Julho', 8 => 'Agosto',
+            9 => 'Setembro', 10 => 'Outubro', 11 => 'Novembro', 12 => 'Dezembro'
+        ];
+
+        for ($m = 1; $m <= 12; $m++) {
+            $mesesDisponiveis->push((object)[
+                'num_ano' => $selectedYear,
+                'num_mes' => $m,
+                'nom_mes' => substr($nomesMeses[$m], 0, 3)
+            ]);
+            $totaisPorMes[$selectedYear . '-' . $m] = ['total' => 0, 'identificado' => 0];
         }
 
-        if ($importacaoSelecionada) {
-            $resumos = $importacaoSelecionada->resumos()
-                ->orderBy('num_ano')
-                ->orderBy('num_mes')
-                ->get();
-
-            $mesesDisponiveis = $resumos
-                ->unique(fn ($r) => $r->num_ano.'-'.str_pad($r->num_mes, 2, '0', STR_PAD_LEFT))
-                ->sortBy(['num_ano', 'num_mes'])
-                ->values();
-
-            $porPessoa = $resumos->groupBy('idt_membro');
-
-            foreach ($porPessoa as $membroId => $resumosPessoa) {
-                $membro = $membroId ? Membro::with('associacao')->find($membroId) : null;
-                $nomePessoa = $membro ? $membro->nom_membro : 'Transações Avulsas / Não Identificadas';
-
-                $linha = [
-                    'nome' => $nomePessoa,
-                    'membro_id' => $membro?->idt_membro ?? null,
-                    'is_member' => !is_null($membro),
-                    'meses' => [],
-                    'total' => 0,
-                    'situacao' => 'Adimplente',
+        // Transações Avulsas / Não Identificadas
+        $resumosAvulsos = $resumos->whereNull('idt_membro');
+        if ($resumosAvulsos->isNotEmpty()) {
+            $linha = [
+                'nome' => 'Transações Avulsas / Não Identificadas',
+                'membro_id' => null,
+                'is_member' => false,
+                'meses' => [],
+                'total' => 0,
+                'situacao' => 'Adimplente',
+            ];
+            foreach ($mesesDisponiveis as $mesRef) {
+                $valor = $resumosAvulsos->where('num_mes', $mesRef->num_mes)->sum('val_total');
+                $linha['meses'][] = [
+                    'key' => $mesRef->num_ano . '-' . $mesRef->num_mes,
+                    'value' => $valor,
+                    'has_payment' => $valor > 0,
                 ];
+                $linha['total'] += $valor;
+                $totaisPorMes[$mesRef->num_ano . '-' . $mesRef->num_mes]['total'] += $valor;
+            }
+            $dadosDashboard[] = $linha;
+        }
 
-                foreach ($mesesDisponiveis as $mesRef) {
-                    $resumoMes = $resumosPessoa->firstWhere(
-                        fn ($r) => $r->num_ano == $mesRef->num_ano && $r->num_mes == $mesRef->num_mes
-                    );
+        $membrosAtivosDiretor = Membro::with('associacao')->where('ind_aprovado', true)->get();
+        $currentMonth = (int) date('n');
+        $currentYearAtual = (int) date('Y');
 
-                    $valor = $resumoMes ? (float) $resumoMes->val_total : 0;
-                    $linha['meses'][] = [
-                        'value' => $valor,
-                        'has_payment' => $valor > 0,
-                    ];
-                    $linha['total'] += $valor;
+        foreach ($membrosAtivosDiretor as $membro) {
+            $membroId = $membro->idt_membro;
+            $resumosMembro = $resumos->where('idt_membro', $membroId);
+            
+            $linha = [
+                'nome' => $membro->nom_membro,
+                'membro_id' => $membroId,
+                'is_member' => true,
+                'meses' => [],
+                'total' => 0,
+                'situacao' => 'Adimplente',
+            ];
+            
+            $joinedYear = (int) $membro->created_at->format('Y');
+            $joinedMonth = (int) $membro->created_at->format('n');
+            
+            $valTaxa = (float) ($membro->associacao?->val_taxa ?? 0);
+            $valAnual = (float) ($membro->associacao?->val_anual ?? 0);
+            
+            $hasInadimplencia = false;
 
-                    if ($valor <= 0) {
-                        $linha['situacao'] = 'Inadimplente';
+            foreach ($mesesDisponiveis as $mesRef) {
+                $m = $mesRef->num_mes;
+                
+                $isExpected = false;
+                if ($selectedYear < $currentYearAtual) {
+                    if ($joinedYear < $selectedYear || ($joinedYear === $selectedYear && $joinedMonth <= $m)) {
+                        $isExpected = true;
+                    }
+                } elseif ($selectedYear === $currentYearAtual) {
+                    if ($m <= $currentMonth && ($joinedYear < $selectedYear || ($joinedYear === $selectedYear && $joinedMonth <= $m))) {
+                        $isExpected = true;
                     }
                 }
 
-                $totalRecebido += $linha['total'];
-                if ($linha['situacao'] === 'Adimplente') {
-                    $totalAdimplentes++;
-                } else {
-                    $totalInadimplentes++;
-                    $valorRecuperar += $membro?->associacao?->val_taxa ?? 0;
+                $valor = (float) $resumosMembro->where('num_mes', $m)->sum('val_total');
+                
+                if ($isExpected) {
+                    if ($valTaxa > 0) {
+                        if ($valor < $valTaxa) {
+                            $hasInadimplencia = true;
+                        }
+                    } else {
+                        $isPaid = $resumosMembro->where('num_mes', $m)->where('ind_pago', true)->isNotEmpty();
+                        if (!$isPaid && $valor <= 0) {
+                            $hasInadimplencia = true;
+                        }
+                    }
                 }
 
-                $dadosDashboard[] = $linha;
+                $linha['meses'][] = [
+                    'key' => $mesRef->num_ano . '-' . $mesRef->num_mes,
+                    'value' => $valor,
+                    'has_payment' => $valor > 0,
+                ];
+                $linha['total'] += $valor;
+                
+                $totaisPorMes[$mesRef->num_ano . '-' . $mesRef->num_mes]['total'] += $valor;
+                $totaisPorMes[$mesRef->num_ano . '-' . $mesRef->num_mes]['identificado'] += $valor;
             }
+            
+            if ($valAnual > 0 && $linha['total'] >= $valAnual) {
+                $linha['situacao'] = 'Adimplente';
+            } elseif ($hasInadimplencia) {
+                $linha['situacao'] = 'Inadimplente';
+            } else {
+                $linha['situacao'] = 'Adimplente';
+            }
+            
+            $dadosDashboard[] = $linha;
         }
 
-        $totalMembrosAtivos = Membro::where('ind_aprovado', true)->count();
+        $membrosIdsAtivos = $membrosAtivosDiretor->pluck('idt_membro')->toArray();
+        $resumosInativos = $resumos->whereNotNull('idt_membro')->whereNotIn('idt_membro', $membrosIdsAtivos)->groupBy('idt_membro');
+        foreach ($resumosInativos as $membroId => $resumosMembro) {
+            $membroInativo = Membro::withoutGlobalScope('associacao')->find($membroId);
+            $linha = [
+                'nome' => ($membroInativo ? $membroInativo->nom_membro : 'Membro Excluído') . ' (Inativo)',
+                'membro_id' => $membroId,
+                'is_member' => true,
+                'meses' => [],
+                'total' => 0,
+                'situacao' => 'Inativo',
+            ];
+            foreach ($mesesDisponiveis as $mesRef) {
+                $m = $mesRef->num_mes;
+                $valor = $resumosMembro->where('num_mes', $m)->sum('val_total');
+                $linha['meses'][] = [
+                    'key' => $mesRef->num_ano . '-' . $mesRef->num_mes,
+                    'value' => $valor,
+                    'has_payment' => $valor > 0,
+                ];
+                $linha['total'] += $valor;
+                $totaisPorMes[$mesRef->num_ano . '-' . $mesRef->num_mes]['total'] += $valor;
+                $totaisPorMes[$mesRef->num_ano . '-' . $mesRef->num_mes]['identificado'] += $valor;
+            }
+            $dadosDashboard[] = $linha;
+        }
+
+        $importacoes = collect();
+        $importacaoSelecionada = null;
+        
+        $currentYear = (int) date('Y');
+        $currentMonth = (int) date('n');
+        
+        $isCurrentYear = $selectedYear === $currentYear;
+        $monthsToConsider = $isCurrentYear ? $currentMonth : 12;
+
+        // Cálculos Globais da Associação
+        $totalRecebidoGeral = Resumo::where('num_ano', $selectedYear)->sum('val_total');
+        $totalNaoIdentificado = Resumo::whereNull('idt_membro')->where('num_ano', $selectedYear)->sum('val_total');
+        $totalPagoDespesas = abs((float) \App\Models\Transacao::where('tip_transacao', 'DEBIT')
+            ->whereYear('dat_transacao', $selectedYear)
+            ->sum('val_transacao'));
+
+        $membrosAtivos = Membro::with('associacao')->where('ind_aprovado', true)->get();
+        $totalAdimplentesGlobais = 0;
+        $totalInadimplentesGlobais = 0;
+
+        $resumosAno = Resumo::where('num_ano', $selectedYear)->where('ind_pago', true)->get();
+        $pagosPorMembro = $resumosAno->groupBy('idt_membro');
+
+        foreach ($membrosAtivos as $membro) {
+            $joinedYear = (int) $membro->created_at->format('Y');
+            $joinedMonth = (int) $membro->created_at->format('n');
+            
+            $valTaxa = (float) ($membro->associacao?->val_taxa ?? 0);
+            $valAnual = (float) ($membro->associacao?->val_anual ?? 0);
+            
+            $pagos = $pagosPorMembro->get($membro->idt_membro, collect());
+            $totalPagoAno = (float) $pagos->sum('val_total');
+            
+            if ($valAnual > 0 && $totalPagoAno >= $valAnual) {
+                $totalAdimplentesGlobais++;
+                continue;
+            }
+            
+            $isInadimplente = false;
+            for ($m = 1; $m <= $monthsToConsider; $m++) {
+                if ($joinedYear < $selectedYear || ($joinedYear === $selectedYear && $joinedMonth <= $m)) {
+                    $pagosNoMes = $pagos->where('num_mes', $m);
+                    $valorNoMes = (float) $pagosNoMes->sum('val_total');
+                    
+                    if ($valTaxa > 0) {
+                        if ($valorNoMes < $valTaxa) {
+                            $isInadimplente = true;
+                            break;
+                        }
+                    } else {
+                        if ($pagosNoMes->isEmpty()) {
+                            $isInadimplente = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if ($isInadimplente) {
+                $totalInadimplentesGlobais++;
+            } else {
+                $totalAdimplentesGlobais++;
+            }
+        }
 
         return [
             'isMembroDashboard' => false,
@@ -352,11 +504,13 @@ new #[Title('Dashboard')] class extends Component {
             'importacaoSelecionada' => $importacaoSelecionada,
             'dadosDashboard' => $dadosDashboard,
             'mesesDisponiveis' => $mesesDisponiveis,
-            'totalRecebido' => $totalRecebido,
-            'valorRecuperar' => $valorRecuperar,
-            'totalAdimplentes' => $totalAdimplentes,
-            'totalInadimplentes' => $totalInadimplentes,
-            'totalMembrosAtivos' => $totalMembrosAtivos,
+            'totaisPorMes' => $totaisPorMes,
+            'totalRecebido' => $totalRecebidoGeral,
+            'totalPagoDespesas' => $totalPagoDespesas,
+            'totalNaoIdentificado' => $totalNaoIdentificado,
+            'totalAdimplentes' => $totalAdimplentesGlobais,
+            'totalInadimplentes' => $totalInadimplentesGlobais,
+            'totalMembrosAtivos' => $membrosAtivos->count(),
             'totalAssociacoes' => $totalAssociacoes,
             'allAssociacoes' => $allAssociacoes,
         ];
@@ -619,8 +773,8 @@ new #[Title('Dashboard')] class extends Component {
                 @endif
             </div>
         @else
-            @if($isAdminDashboard || $importacaoSelecionada)
-                <!-- Seletor de Associação (Admin/Diretor) -->
+            <!-- Filtros -->
+            @if($isAdminDashboard)
                 <div class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-zinc-900 mb-6">
                     <div class="flex items-center gap-3 w-full sm:w-auto">
                         <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
@@ -628,11 +782,7 @@ new #[Title('Dashboard')] class extends Component {
                         </div>
                         <div class="flex flex-col gap-1 flex-1 sm:flex-initial">
                             <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Associação Selecionada</p>
-                            @if(auth()->user()->isAdmin())
-                                <x-select-associacao wire:model.live="selectedAssociacaoId" class="w-full sm:w-64" :show-all-option="true" />
-                            @else
-                                <x-select-associacao wire:model.live="selectedAssociacaoId" class="w-full sm:w-64" disabled :associacoes="$allAssociacoes" />
-                            @endif
+                            <x-select-associacao wire:model.live="selectedAssociacaoId" class="w-full sm:w-64" :show-all-option="true" />
                         </div>
                         
                         <div class="flex items-center gap-3 w-full sm:w-auto mt-4 sm:mt-0 sm:ml-4 border-t sm:border-t-0 sm:border-l border-neutral-200 dark:border-neutral-700 pt-4 sm:pt-0 sm:pl-4">
@@ -650,123 +800,133 @@ new #[Title('Dashboard')] class extends Component {
                         </div>
                     </div>
                 </div>
-
-                @if(!$isAdminDashboard)
-                <!-- Seletor de Importação (Diretor) -->
+            @else
+                <!-- Filtro de Ano (Diretor) -->
                 <div class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-zinc-900 mb-6">
                     <div class="flex items-center gap-3 w-full sm:w-auto">
                         <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
-                            <flux:icon name="building-library" class="size-5" />
+                            <flux:icon name="calendar" class="size-5" />
                         </div>
                         <div>
-                            <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Extrato Selecionado</p>
-                            <p class="text-sm font-bold text-neutral-800 dark:text-neutral-100">{{ $importacaoSelecionada->des_arquivo }}</p>
-                            <p class="text-xs text-neutral-500 dark:text-neutral-400">
-                                {{ $importacaoSelecionada->dat_inicio?->format('d/m/Y') }} – {{ $importacaoSelecionada->dat_fim?->format('d/m/Y') }} • {{ $importacaoSelecionada->qtd_transacao }} transações
-                            </p>
+                            <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Ano do Acompanhamento</p>
+                            <p class="text-sm font-bold text-neutral-800 dark:text-neutral-100">{{ $selectedYear }}</p>
                         </div>
                     </div>
-                    @if($importacoes->count() > 0)
                     <div class="flex items-center gap-2 w-full sm:w-auto">
-                        <flux:select wire:model.live="selectedImportId" class="w-full sm:w-64">
-                            @foreach($importacoes as $imp)
-                                <flux:select.option value="{{ $imp->idt_ofx }}">
-                                    {{ $imp->des_arquivo }} ({{ $imp->dat_inicio?->format('m/Y') }})
-                                </flux:select.option>
-                            @endforeach
+                        <flux:select wire:model.live="selectedYear" class="w-full sm:w-32">
+                            @for($y = date('Y'); $y >= 2024; $y--)
+                                <flux:select.option value="{{ $y }}">{{ $y }}</flux:select.option>
+                            @endfor
                         </flux:select>
-                        <flux:button href="{{ route('upload') }}" icon="plus" size="sm" variant="primary" class="flex-shrink-0">Novo</flux:button>
                     </div>
-                    @endif
                 </div>
-                @endif
+            @endif
 
-                <!-- Cards de Estatísticas -->
-                @if($isAdminDashboard)
-                <div class="grid auto-rows-min gap-4 md:grid-cols-3 lg:grid-cols-6">
-                    <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
-                        <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Valores Recebidos</p>
-                        <div class="flex w-full items-center justify-between">
-                            <p class="text-lg font-bold text-green-600">R$ {{ number_format($valoresRecebidos, 2, ',', '.') }}</p>
-                            <flux:icon name="arrow-trending-up" class="size-5 text-green-500 opacity-60" />
-                        </div>
-                    </flux:card>
-                    <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
-                        <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Valores Pagos</p>
-                        <div class="flex w-full items-center justify-between">
-                            <p class="text-lg font-bold text-red-600">R$ {{ number_format($valoresPagos, 2, ',', '.') }}</p>
-                            <flux:icon name="arrow-trending-down" class="size-5 text-red-500 opacity-60" />
-                        </div>
-                    </flux:card>
-                    <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
-                        <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Valores Pendentes</p>
-                        <div class="flex w-full items-center justify-between">
-                            <p class="text-lg font-bold text-orange-500">R$ {{ number_format($valoresPendentes, 2, ',', '.') }}</p>
-                            <flux:icon name="exclamation-circle" class="size-5 text-orange-400 opacity-60" />
-                        </div>
-                    </flux:card>
-                    <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
-                        <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Valor Esperado</p>
-                        <div class="flex w-full items-center justify-between">
-                            <p class="text-lg font-bold text-blue-600">R$ {{ number_format($valorEsperado, 2, ',', '.') }}</p>
-                            <flux:icon name="banknotes" class="size-5 text-blue-500 opacity-60" />
-                        </div>
-                    </flux:card>
-                    <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
-                        <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Membros Ativos</p>
-                        <div class="flex w-full items-center justify-between">
-                            <p class="text-xl font-bold text-blue-600">{{ $totalMembrosAtivos }}</p>
-                            <flux:icon name="users" class="size-5 text-blue-500 opacity-60" />
-                        </div>
-                    </flux:card>
-                    <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
-                        <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Membros Inadimplentes</p>
-                        <div class="flex w-full items-center justify-between">
-                            <p class="text-xl font-bold text-red-600">{{ $totalInadimplentes }}</p>
-                            <flux:icon name="x-circle" class="size-5 text-red-500 opacity-60" />
-                        </div>
-                    </flux:card>
-                </div>
-                @else
-                <div class="grid auto-rows-min gap-4 md:grid-cols-4">
-                    <flux:card class="flex items-center justify-between p-5">
-                        <div>
-                            <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Total Recebido</p>
-                            <p class="mt-1 text-2xl font-bold text-neutral-800 dark:text-neutral-100">R$ {{ number_format($totalRecebido,2,',','.') }}</p>
-                        </div>
-                        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-green-100 text-green-600 dark:bg-green-900/30">
-                            <flux:icon name="banknotes" class="size-5" />
-                        </div>
-                    </flux:card>
-                    <flux:card class="flex items-center justify-between p-5">
-                        <div>
-                            <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Adimplentes</p>
-                            <p class="mt-1 text-2xl font-bold text-green-600">{{ $totalAdimplentes }}</p>
-                        </div>
-                        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-green-100 text-green-600 dark:bg-green-900/30">
-                            <flux:icon name="check-circle" class="size-5" />
-                        </div>
-                    </flux:card>
-                    <flux:card class="flex items-center justify-between p-5">
-                        <div>
-                            <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Inadimplentes</p>
-                            <p class="mt-1 text-2xl font-bold text-red-600">{{ $totalInadimplentes }}</p>
-                        </div>
-                        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-red-100 text-red-600 dark:bg-red-900/30">
-                            <flux:icon name="exclamation-triangle" class="size-5" />
-                        </div>
-                    </flux:card>
-                    <flux:card class="flex items-center justify-between p-5">
-                        <div>
-                            <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Membros Ativos</p>
-                            <p class="mt-1 text-2xl font-bold text-blue-600">{{ $totalMembrosAtivos }}</p>
-                        </div>
-                        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
-                            <flux:icon name="users" class="size-5" />
-                        </div>
-                    </flux:card>
-                </div>
-                @endif
+
+            <!-- Cards de Estatísticas -->
+            @if($isAdminDashboard)
+            <div class="grid auto-rows-min gap-4 md:grid-cols-3 lg:grid-cols-6 mb-6">
+                <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Valores Recebidos</p>
+                    <div class="flex w-full items-center justify-between">
+                        <p class="text-lg font-bold text-green-600">R$ {{ number_format($valoresRecebidos, 2, ',', '.') }}</p>
+                        <flux:icon name="arrow-trending-up" class="size-5 text-green-500 opacity-60" />
+                    </div>
+                </flux:card>
+                <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Valores Pagos</p>
+                    <div class="flex w-full items-center justify-between">
+                        <p class="text-lg font-bold text-red-600">R$ {{ number_format($valoresPagos, 2, ',', '.') }}</p>
+                        <flux:icon name="arrow-trending-down" class="size-5 text-red-500 opacity-60" />
+                    </div>
+                </flux:card>
+                <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Valores Pendentes</p>
+                    <div class="flex w-full items-center justify-between">
+                        <p class="text-lg font-bold text-orange-500">R$ {{ number_format($valoresPendentes, 2, ',', '.') }}</p>
+                        <flux:icon name="exclamation-circle" class="size-5 text-orange-400 opacity-60" />
+                    </div>
+                </flux:card>
+                <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Valor Esperado</p>
+                    <div class="flex w-full items-center justify-between">
+                        <p class="text-lg font-bold text-blue-600">R$ {{ number_format($valorEsperado, 2, ',', '.') }}</p>
+                        <flux:icon name="banknotes" class="size-5 text-blue-500 opacity-60" />
+                    </div>
+                </flux:card>
+                <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Membros Ativos</p>
+                    <div class="flex w-full items-center justify-between">
+                        <p class="text-xl font-bold text-blue-600">{{ $totalMembrosAtivos }}</p>
+                        <flux:icon name="users" class="size-5 text-blue-500 opacity-60" />
+                    </div>
+                </flux:card>
+                <flux:card class="flex flex-col items-start justify-between p-4 space-y-2">
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Membros Inadimplentes</p>
+                    <div class="flex w-full items-center justify-between">
+                        <p class="text-xl font-bold text-red-600">{{ $totalInadimplentes }}</p>
+                        <flux:icon name="x-circle" class="size-5 text-red-500 opacity-60" />
+                    </div>
+                </flux:card>
+            </div>
+            @else
+            <div class="grid auto-rows-min gap-4 md:grid-cols-3 lg:grid-cols-6 mb-6">
+                <flux:card class="flex items-center justify-between p-5">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Total Recebido</p>
+                        <p class="mt-1 text-2xl font-bold text-neutral-800 dark:text-neutral-100">R$ {{ number_format($totalRecebido,2,',','.') }}</p>
+                    </div>
+                    <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-green-100 text-green-600 dark:bg-green-900/30">
+                        <flux:icon name="banknotes" class="size-5" />
+                    </div>
+                </flux:card>
+                <flux:card class="flex items-center justify-between p-5">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Total Pago</p>
+                        <p class="mt-1 text-2xl font-bold text-red-600">R$ {{ number_format($totalPagoDespesas,2,',','.') }}</p>
+                    </div>
+                    <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-red-100 text-red-600 dark:bg-red-900/30">
+                        <flux:icon name="arrow-trending-down" class="size-5" />
+                    </div>
+                </flux:card>
+                <flux:card class="flex items-center justify-between p-5">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Não Identificado</p>
+                        <p class="mt-1 text-2xl font-bold text-orange-600">R$ {{ number_format($totalNaoIdentificado,2,',','.') }}</p>
+                    </div>
+                    <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-100 text-orange-600 dark:bg-orange-900/30">
+                        <flux:icon name="question-mark-circle" class="size-5" />
+                    </div>
+                </flux:card>
+                <flux:card class="flex items-center justify-between p-5">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Adimplentes</p>
+                        <p class="mt-1 text-2xl font-bold text-green-600">{{ $totalAdimplentes }}</p>
+                    </div>
+                    <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-green-100 text-green-600 dark:bg-green-900/30">
+                        <flux:icon name="check-circle" class="size-5" />
+                    </div>
+                </flux:card>
+                <flux:card class="flex items-center justify-between p-5">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Inadimplentes</p>
+                        <p class="mt-1 text-2xl font-bold text-red-600">{{ $totalInadimplentes }}</p>
+                    </div>
+                    <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-red-100 text-red-600 dark:bg-red-900/30">
+                        <flux:icon name="exclamation-triangle" class="size-5" />
+                    </div>
+                </flux:card>
+                <flux:card class="flex items-center justify-between p-5">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Membros Ativos</p>
+                        <p class="mt-1 text-2xl font-bold text-blue-600">{{ $totalMembrosAtivos }}</p>
+                    </div>
+                    <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
+                        <flux:icon name="users" class="size-5" />
+                    </div>
+                </flux:card>
+            </div>
+            @endif
 
                 <!-- Seções Principais -->
                 <div class="space-y-6">
@@ -784,10 +944,10 @@ new #[Title('Dashboard')] class extends Component {
                                 <thead>
                                     <tr class="bg-neutral-50 text-xs uppercase tracking-wider text-neutral-600 dark:bg-zinc-800/50 dark:text-neutral-400">
                                         <th class="px-4 py-3 text-left font-bold">Pagador (MEMO)</th>
+                                        <th class="px-4 py-3 text-right font-bold">Total</th>
                                         @foreach($mesesDisponiveis as $month)
                                             <th class="px-3 py-3 text-center font-bold">{{ $month->nom_mes }}<span class="block text-[10px] font-normal opacity-60">{{ $month->num_ano }}</span></th>
                                         @endforeach
-                                        <th class="px-4 py-3 text-right font-bold">Total</th>
                                         <th class="px-4 py-3 text-center font-bold">Situação</th>
                                     </tr>
                                 </thead>
@@ -809,18 +969,18 @@ new #[Title('Dashboard')] class extends Component {
                                                     </div>
                                                 </div>
                                             </td>
+                                            <td class="px-4 py-3 text-right font-bold text-neutral-700 dark:text-neutral-300">
+                                                R$ {{ number_format($row['total'],0,',','.') }}
+                                            </td>
                                             @foreach($row['meses'] as $m)
                                                 <td class="px-3 py-3 text-center">
                                                     @if($m['has_payment'])
                                                         <span class="inline-block rounded bg-green-50 px-2 py-1 text-xs font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-400">R$ {{ number_format($m['value'],0,',','.') }}</span>
                                                     @else
-                                                        <span class="text-xs font-bold text-neutral-300 dark:text-neutral-600">—</span>
+                                                        <span class="text-xs font-bold text-neutral-300 dark:text-neutral-600">R$ 0</span>
                                                     @endif
                                                 </td>
                                             @endforeach
-                                            <td class="px-4 py-3 text-right font-bold text-neutral-700 dark:text-neutral-300">
-                                                R$ {{ number_format($row['total'],0,',','.') }}
-                                            </td>
                                             <td class="px-4 py-3 text-center">
                                                 @if($row['situacao'] === 'Adimplente')
                                                     <span class="inline-flex items-center gap-1 rounded bg-green-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-green-700 dark:bg-green-900/30 dark:text-green-400">
@@ -836,28 +996,44 @@ new #[Title('Dashboard')] class extends Component {
                                     @empty
                                         <tr>
                                             <td colspan="100%" class="px-4 py-8 text-center text-neutral-500">
-                                                Nenhuma pessoa identificada neste extrato.
+                                                Nenhuma pessoa identificada neste ano.
                                             </td>
                                         </tr>
                                     @endforelse
                                 </tbody>
+                                @if(count($dadosDashboard) > 0)
+                                <tfoot class="bg-neutral-50 border-t-2 border-neutral-200 dark:bg-zinc-800/50 dark:border-neutral-700">
+                                    <tr>
+                                        <td class="px-4 py-4 text-left">
+                                            <div class="text-xs font-bold uppercase tracking-wider text-neutral-600 dark:text-neutral-400">Total Pago Pelos Membros</div>
+                                            <div class="text-[10px] mt-1 text-neutral-500 uppercase tracking-wider">Total Recebido (Geral)</div>
+                                        </td>
+                                        <td class="px-4 py-4 text-right">
+                                            @php
+                                                $totalMembrosAno = array_sum(array_column($totaisPorMes, 'identificado'));
+                                                $totalGeralAno = array_sum(array_column($totaisPorMes, 'total'));
+                                            @endphp
+                                            <div class="text-sm font-bold text-green-700 dark:text-green-400">R$ {{ number_format($totalMembrosAno, 0, ',', '.') }}</div>
+                                            <div class="text-xs mt-1 font-semibold text-neutral-600 dark:text-neutral-400">R$ {{ number_format($totalGeralAno, 0, ',', '.') }}</div>
+                                        </td>
+                                        @foreach($mesesDisponiveis as $month)
+                                            @php
+                                                $key = $month->num_ano . '-' . $month->num_mes;
+                                                $tot = $totaisPorMes[$key] ?? ['identificado' => 0, 'total' => 0];
+                                            @endphp
+                                            <td class="px-3 py-4 text-center">
+                                                <div class="text-sm font-bold text-green-700 dark:text-green-400">R$ {{ number_format($tot['identificado'], 0, ',', '.') }}</div>
+                                                <div class="text-xs mt-1 font-semibold text-neutral-600 dark:text-neutral-400">R$ {{ number_format($tot['total'], 0, ',', '.') }}</div>
+                                            </td>
+                                        @endforeach
+                                        <td></td>
+                                    </tr>
+                                </tfoot>
+                                @endif
                             </table>
                         </div>
                     </flux:card>                
                     @endif
                 </div>
-            @else
-                <!-- Estado vazio para Diretor -->
-                <div class="flex flex-1 flex-col items-center justify-center rounded-xl border border-neutral-200 bg-white p-12 text-center dark:border-neutral-700 dark:bg-zinc-900">
-                    <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-900/20">
-                        <flux:icon name="arrow-up-tray" class="size-8 text-blue-600" />
-                    </div>
-                    <h3 class="text-lg font-bold text-neutral-800 dark:text-neutral-100">Nenhum extrato OFX importado</h3>
-                    <p class="mx-auto mb-6 mt-2 max-w-md text-sm text-neutral-500 dark:text-neutral-400">
-                        Importe seu primeiro extrato do Banco do Brasil para visualizar o acompanhamento mensal, identificar inadimplentes e disparar notificações.
-                    </p>
-                    <flux:button href="{{ route('upload') }}" variant="primary" icon="arrow-up-tray">Importar Extrato OFX</flux:button>
-                </div>
-            @endif
         @endif
     </div>

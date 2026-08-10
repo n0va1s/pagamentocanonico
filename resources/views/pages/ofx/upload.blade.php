@@ -296,9 +296,9 @@ new class extends Component {
             <form wire:submit.prevent="processar" class="space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                     @if(auth()->user()->isAdmin())
-                        <x-select-associacao id="idt_associacao" label="Associação" wire:model.live="idt_associacao" :show-all-option="true" required />
+                        <x-select-associacao id="idt_associacao" label="Associação" wire:model.live="idt_associacao" :show-all-option="false" required />
                     @else
-                        <x-select-associacao id="idt_associacao_disabled" label="Associação" :show-all-option="true" disabled :associacoes="$associacoes->where('idt_associacao', $idt_associacao)" />
+                        <x-select-associacao id="idt_associacao_disabled" label="Associação" wire:model="idt_associacao" :show-all-option="false" disabled :associacoes="$associacoes->where('idt_associacao', $idt_associacao)" />
                     @endif
 
                     <flux:field>
@@ -336,7 +336,7 @@ new class extends Component {
                         Processar Extrato
                     </flux:button>
                     <flux:button :href="route('orcamentos')" variant="outline" icon="document-duplicate" wire:navigate>
-                        Anexar Orçamentos (Débitos)
+                        Anexar Notas
                     </flux:button>
                 </div>
             </form>

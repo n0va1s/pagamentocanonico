@@ -88,7 +88,7 @@ new class extends Component {
         );
 
         $this->closeModal();
-        \Flux::toast(variant: 'success', text: 'Orçamentos anexados com sucesso!');
+        \Flux::toast(variant: 'success', text: ' anexados com sucesso!');
     }
 }; ?>
 
@@ -96,9 +96,9 @@ new class extends Component {
     <div class="pc-page-header">
         <div>
             <h1 class="text-2xl font-bold text-neutral-800 dark:text-neutral-100 flex items-center gap-2">
-                <flux:icon name="document-duplicate" class="size-6 text-blue-600" /> Orçamentos (Saídas)
+                <flux:icon name="document-duplicate" class="size-6 text-blue-600" /> Despesas
             </h1>
-            <p class="text-sm text-neutral-500 dark:text-neutral-400 mt-1">Gerencie e anexe os orçamentos/cotações que justificam as transações de débito.</p>
+            <p class="text-sm text-neutral-500 dark:text-neutral-400 mt-1">Gerencie e anexe as notas fiscais que justificam as transações de débito.</p>
         </div>
     </div>
 
@@ -146,7 +146,7 @@ new class extends Component {
                         </flux:table.cell>
                         <flux:table.cell>
                             <flux:button size="sm" wire:click="openModal({{ $t->idt_transacao }})">
-                                {{ $t->orcamento ? 'Atualizar Orçamentos' : 'Anexar Orçamentos' }}
+                                {{ $t->orcamento ? 'Atualizar Notas' : 'Anexar Notas' }}
                             </flux:button>
                         </flux:table.cell>
                     </flux:table.row>
@@ -167,12 +167,12 @@ new class extends Component {
     <flux:modal name="upload-orcamentos" class="min-w-[400px]">
         <div class="space-y-6">
             <div>
-                <flux:heading size="lg">Anexar Orçamentos</flux:heading>
-                <flux:subheading>Envie até 3 arquivos de orçamento (PDF ou Imagem) para esta transação.</flux:subheading>
+                <flux:heading size="lg">Anexar Notas</flux:heading>
+                <flux:subheading>Envie até 3 arquivos de despesas (PDF ou Imagem) para esta transação.</flux:subheading>
             </div>
 
             <form wire:submit="salvar" class="space-y-4">
-                <flux:input type="file" label="Orçamento 1 (Obrigatório)" wire:model="file1" accept=".pdf,.png,.jpg,.jpeg" required />
+                <flux:input type="file" label="Despesa 1 (Obrigatório)" wire:model="file1" accept=".pdf,.png,.jpg,.jpeg" required />
                 <flux:input type="file" label="Orçamento 2 (Opcional)" wire:model="file2" accept=".pdf,.png,.jpg,.jpeg" />
                 <flux:input type="file" label="Orçamento 3 (Opcional)" wire:model="file3" accept=".pdf,.png,.jpg,.jpeg" />
 

@@ -31,7 +31,7 @@
                         {{ __('Importar OFX') }}
                     </flux:navbar.item>
                     <flux:navbar.item icon="document-duplicate" :href="route('orcamentos')" :current="request()->routeIs('orcamentos')" wire:navigate>
-                        {{ __('Orçamentos') }}
+                        {{ __('Despesas') }}
                     </flux:navbar.item>
                     <flux:navbar.item icon="users" :href="route('membros.index')" :current="request()->routeIs('membros.*')" wire:navigate>
                         {{ __('Membros') }}
@@ -83,7 +83,7 @@
                             {{ __('Importar OFX') }}
                         </flux:sidebar.item>
                         <flux:sidebar.item icon="document-duplicate" :href="route('orcamentos')" :current="request()->routeIs('orcamentos')" wire:navigate>
-                            {{ __('Orçamentos') }}
+                            {{ __('Despesas') }}
                         </flux:sidebar.item>
                     </flux:sidebar.group>
                 @endcan

@@ -52,3 +52,9 @@ O ambiente oficial de desenvolvimento do projeto é o WSL (Windows Subsystem for
 - Todos os comandos de terminal (como `composer`, `npm`, `php artisan`, `pest`) devem ser executados obrigatoriamente de dentro do WSL.
 - Para evitar problemas severos de performance de I/O, o repositório do projeto deve residir estritamente no sistema de arquivos do Linux (ex: `/home/n0va1s/...`) e nunca em diretórios montados do Windows (como `/mnt/c/...`).
 
+## 6. Padroes de desenvolvimento
+ - Espaçamento com 4 espaços
+ - Variáveis baseadas em semântica
+ - Varíaveis sempre em português do Brasil
+ - Variáveis em CamelCase
+

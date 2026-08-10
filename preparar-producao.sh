@@ -1,11 +1,19 @@
 #!/bin/bash
 
 echo "[1/4] Compilando assets do Front-end..."
-npm install && npm run build
+if command -v npm &> /dev/null && npm --version &> /dev/null; then
+    npm install && npm run build
+elif [ -f "./vendor/bin/sail" ]; then
+    echo "NPM local não encontrado ou com erro (WSL). Usando Laravel Sail..."
+    ./vendor/bin/sail npm install && ./vendor/bin/sail npm run build
+else
+    echo "ERRO: npm não encontrado. Instale o Node.js ou use o Laravel Sail."
+    exit 1
+fi
 
 echo "[2/4] Limpando caches antigos do Laravel..."
 php artisan clear-compiled
-php artisan cache:clear
+CACHE_STORE=array php artisan cache:clear
 php artisan config:clear
 php artisan route:clear
 php artisan view:clear
