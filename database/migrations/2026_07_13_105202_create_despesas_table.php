@@ -11,12 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('orcamentos', function (Blueprint $table) {
-            $table->id('idt_orcamento');
+        Schema::create('despesas', function (Blueprint $table) {
+            $table->id('idt_despesa');
             $table->foreignId('idt_transacao')->constrained('transacoes', 'idt_transacao')->cascadeOnDelete();
-            $table->string('arq_orcamento_1'); // Required
-            $table->string('arq_orcamento_2')->nullable(); // Optional
-            $table->string('arq_orcamento_3')->nullable(); // Optional
+            $table->string('arq_despesa_1'); // Required
+            $table->string('arq_despesa_2')->nullable(); // Optional
+            $table->string('arq_despesa_3')->nullable(); // Optional
+            $table->string('arq_pagamento')->nullable(); // Optional (Comprovante de pagamento)
             $table->timestamps();
         });
     }
@@ -26,6 +27,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('orcamentos');
+        Schema::dropIfExists('despesas');
     }
 };

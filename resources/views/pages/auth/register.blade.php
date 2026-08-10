@@ -83,7 +83,7 @@
                     label="Endereço"
                     :value="old('end_logradouro')"
                     type="text"
-                    placeholder="Ex: SMLN MI Trecho 03 - Rua Jerivá"
+                    placeholder="Ex: Rua Jerivá, Quadra 01"
                 />
             </div>
 

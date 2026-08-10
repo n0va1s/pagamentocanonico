@@ -24,9 +24,12 @@ new class extends Component {
     {
         if (!auth()->user()->isAdmin()) {
             $this->idt_associacao = auth()->user()->membro?->idt_associacao;
+        } else {
+            $associacoes = Associacao::orderBy('nom_associacao')->get();
+            if ($associacoes->count() === 1) {
+                $this->idt_associacao = $associacoes->first()->idt_associacao;
+            }
         }
-
-
     }
 
     public function updatedIdtAssociacao()
@@ -335,7 +338,7 @@ new class extends Component {
                     <flux:button type="submit" variant="primary" class="px-5">
                         Processar Extrato
                     </flux:button>
-                    <flux:button :href="route('orcamentos')" variant="outline" icon="document-duplicate" wire:navigate>
+                    <flux:button :href="route('despesas')" variant="outline" icon="document-duplicate" wire:navigate>
                         Anexar Notas
                     </flux:button>
                 </div>

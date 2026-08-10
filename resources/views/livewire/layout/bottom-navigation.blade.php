@@ -55,16 +55,16 @@ new class extends Component {
             </a>
 
             @php
-                $isOrcamentos = request()->routeIs('orcamentos');
+                $isDespesas = request()->routeIs('despesas');
             @endphp
-            <a href="{{ route('orcamentos') }}" 
+            <a href="{{ route('despesas') }}" 
                wire:navigate 
                aria-label="{{ __('Despesas') }}"
-               @if($isOrcamentos) aria-current="page" @endif
-               class="flex flex-col items-center justify-center min-w-[48px] min-h-[48px] w-full py-1 text-xs transition-colors rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 {{ $isOrcamentos ? 'text-indigo-700 dark:text-indigo-300 font-bold' : 'text-zinc-900 hover:text-indigo-600 dark:text-zinc-100 dark:hover:text-indigo-300 font-medium' }}">
+               @if($isDespesas) aria-current="page" @endif
+               class="flex flex-col items-center justify-center min-w-[48px] min-h-[48px] w-full py-1 text-xs transition-colors rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 {{ $isDespesas ? 'text-indigo-700 dark:text-indigo-300 font-bold' : 'text-zinc-900 hover:text-indigo-600 dark:text-zinc-100 dark:hover:text-indigo-300 font-medium' }}">
                 <flux:icon name="document-duplicate" class="size-6 mb-0.5" />
                 <span class="truncate max-w-[64px] text-[10px] sm:text-xs">{{ __('Despesas') }}</span>
-                @if($isOrcamentos)
+                @if($isDespesas)
                     <span class="w-1.5 h-1.5 rounded-full bg-indigo-700 dark:bg-indigo-300 mt-0.5" aria-hidden="true"></span>
                 @endif
             </a>

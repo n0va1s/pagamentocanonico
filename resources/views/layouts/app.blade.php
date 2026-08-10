@@ -30,7 +30,7 @@
                     <flux:navbar.item icon="arrow-up-tray" :href="route('upload')" :current="request()->routeIs('upload')" wire:navigate>
                         {{ __('Importar OFX') }}
                     </flux:navbar.item>
-                    <flux:navbar.item icon="document-duplicate" :href="route('orcamentos')" :current="request()->routeIs('orcamentos')" wire:navigate>
+                    <flux:navbar.item icon="document-duplicate" :href="route('despesas')" :current="request()->routeIs('despesas')" wire:navigate>
                         {{ __('Despesas') }}
                     </flux:navbar.item>
                     <flux:navbar.item icon="users" :href="route('membros.index')" :current="request()->routeIs('membros.*')" wire:navigate>
@@ -82,7 +82,7 @@
                         <flux:sidebar.item icon="arrow-up-tray" :href="route('upload')" :current="request()->routeIs('upload')" wire:navigate>
                             {{ __('Importar OFX') }}
                         </flux:sidebar.item>
-                        <flux:sidebar.item icon="document-duplicate" :href="route('orcamentos')" :current="request()->routeIs('orcamentos')" wire:navigate>
+                        <flux:sidebar.item icon="document-duplicate" :href="route('despesas')" :current="request()->routeIs('despesas')" wire:navigate>
                             {{ __('Despesas') }}
                         </flux:sidebar.item>
                     </flux:sidebar.group>

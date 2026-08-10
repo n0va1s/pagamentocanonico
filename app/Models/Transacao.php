@@ -41,9 +41,9 @@ class Transacao extends Model
         return $this->belongsTo(Ofx::class, 'idt_ofx');
     }
 
-    public function orcamento()
+    public function despesa()
     {
-        return $this->hasOne(Orcamento::class, 'idt_transacao');
+        return $this->hasOne(Despesa::class, 'idt_transacao');
     }
 
     protected static function booted(): void

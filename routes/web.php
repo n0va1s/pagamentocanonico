@@ -13,7 +13,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('role:admin,diretor')->group(function () {
 
         Volt::route('/aprovacoes', 'pages.aprovacoes')->name('aprovacoes');
-        Volt::route('/orcamentos', 'pages.orcamentos.index')->name('orcamentos');
+        Volt::route('/despesas', 'pages.despesas.index')->name('despesas');
 
         Volt::route('/mensagens', 'mensagens.index')->name('mensagens.index');
         Volt::route('/mensagens/criar', 'mensagens.create')->name('mensagens.create');
@@ -37,15 +37,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
 require __DIR__.'/settings.php';
 
 Route::get('/limpar-tudo', function () {
-    Artisan::call('cache:clear');
-    Artisan::call('config:clear');
-    Artisan::call('route:clear');
-    Artisan::call('view:clear');
+    Artisan::call('optimize:clear');
 
     return 'Todos os caches foram limpos com sucesso!';
 });
 
-Route::get('/otimizar', function () {
+Route::get('/otimizar-tudo', function () {
     Artisan::call('optimize');
 
     return 'Aplicação otimizada com sucesso! (Configurações e rotas foram cacheadas)';

@@ -55,6 +55,15 @@
     @apply  !mb-0 !leading-tight;
 }
 
+/* Auth & Mobile Input Controls & Placeholders */
+[data-flux-control] {
+    @apply text-base sm:text-sm min-h-[44px] sm:min-h-[40px] py-2.5 px-3.5 sm:py-2 sm:px-3 rounded-lg transition-colors duration-150;
+}
+
+[data-flux-control]::placeholder {
+    @apply text-zinc-400 dark:text-zinc-500 font-normal text-sm leading-normal opacity-100;
+}
+
 input:focus[data-flux-control],
 textarea:focus[data-flux-control],
 select:focus[data-flux-control] {

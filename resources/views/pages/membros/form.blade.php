@@ -331,7 +331,7 @@ new class extends Component {
 
             <flux:button type="submit" variant="primary" wire:loading.attr="disabled">
                 <span wire:loading.remove>
-                    {{ $editando ? 'Salvar alterações' : 'Cadastrar membro' }}
+                    Salvar
                 </span>
                 <span wire:loading>Salvando...</span>
             </flux:button>

@@ -101,7 +101,7 @@ new class extends Component {
 
         <div class="flex items-center justify-end gap-3">
             <flux:button type="button" variant="ghost" wire:navigate href="{{ route('associacoes.index') }}">Cancelar</flux:button>
-            <flux:button type="submit" variant="primary">Cadastrar</flux:button>
+            <flux:button type="submit" variant="primary">Salvar</flux:button>
         </div>
     </form>
 </div>

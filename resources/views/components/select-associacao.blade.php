@@ -9,9 +9,11 @@
     $items = $associacoes ?? \App\Models\Associacao::orderBy('nom_associacao')->get();
 @endphp
 
-<flux:select {{ $attributes->merge(['placeholder' => $showAllOption ? null : $placeholder]) }}>
+<flux:select {{ $attributes }}>
     @if($showAllOption)
         <flux:select.option value="">{{ $allOptionLabel }}</flux:select.option>
+    @elseif($placeholder)
+        <flux:select.option value="">{{ $placeholder }}</flux:select.option>
     @endif
 
     @foreach($items as $assoc)

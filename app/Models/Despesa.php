@@ -5,22 +5,23 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Orcamento extends Model
+class Despesa extends Model
 {
     use HasFactory;
 
-    protected $table = 'orcamentos';
-    protected $primaryKey = 'idt_orcamento';
+    protected $table = 'despesas';
+    protected $primaryKey = 'idt_despesa';
 
     protected $fillable = [
         'idt_transacao',
-        'arq_orcamento_1',
-        'arq_orcamento_2',
-        'arq_orcamento_3',
+        'arq_despesa_1',
+        'arq_despesa_2',
+        'arq_despesa_3',
+        'arq_pagamento',
     ];
 
     /**
-     * Get the transaction that owns the budget files.
+     * Get the transaction that owns the expense files.
      */
     public function transacao()
     {
