@@ -38,6 +38,28 @@ class Associacao extends Model
         return $this->hasMany(Ofx::class, 'idt_associacao', 'idt_associacao');
     }
 
+    public function taxas(): HasMany
+    {
+        return $this->hasMany(AssociacaoTaxa::class, 'idt_associacao', 'idt_associacao');
+    }
+
+    /**
+     * Retorna o registro de taxa vigente na data informada (ou data atual se nulo).
+     */
+    public function getTaxaVigenteEm(?string $data = null): ?AssociacaoTaxa
+    {
+        $dataRef = $data ?? now()->format('Y-m-d');
+
+        return $this->taxas()
+            ->where('dat_inicio', '<=', $dataRef)
+            ->where(function ($q) use ($dataRef) {
+                $q->whereNull('dat_fim')
+                  ->orWhere('dat_fim', '>=', $dataRef);
+            })
+            ->orderByDesc('dat_inicio')
+            ->first();
+    }
+
     public function getChavePixAttribute(): ?string
     {
         return $this->des_chave_pix;

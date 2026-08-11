@@ -134,12 +134,14 @@ class OfxParserService
             $cpf = $this->extrairCpfDoMemo($bloco['MEMO'] ?? null);
             $membro = null;
             if ($cpf) {
-                $membro = \App\Models\Membro::where(function($query) use ($cpf) {
-                    $query->whereRaw("REPLACE(REPLACE(num_cpf_membro, '.', ''), '-', '') = ?", [$cpf]);
-                    if (strlen($cpf) === 14 && str_starts_with($cpf, '000')) {
-                        $query->orWhereRaw("REPLACE(REPLACE(num_cpf_membro, '.', ''), '-', '') = ?", [substr($cpf, 3)]);
-                    }
-                })->first();
+                $membro = \App\Models\Membro::withoutGlobalScopes()
+                    ->when($ofx->idt_associacao, fn($q) => $q->where('idt_associacao', $ofx->idt_associacao))
+                    ->where(function($query) use ($cpf) {
+                        $query->whereRaw("REPLACE(REPLACE(num_cpf_membro, '.', ''), '-', '') = ?", [$cpf]);
+                        if (strlen($cpf) === 14 && str_starts_with($cpf, '000')) {
+                            $query->orWhereRaw("REPLACE(REPLACE(num_cpf_membro, '.', ''), '-', '') = ?", [substr($cpf, 3)]);
+                        }
+                    })->first();
             }
 
             Transacao::create([
@@ -168,8 +170,8 @@ class OfxParserService
     private function gerarResumosMensais(Ofx $ofx): void
     {
         $associacao = \App\Models\Associacao::find($ofx->idt_associacao);
-        $valTaxa = $associacao ? (float) $associacao->val_taxa : 0.0;
-        $valAnual = $associacao ? (float) $associacao->val_anual : 0.0;
+        $valTaxaPadrao = $associacao ? (float) $associacao->val_taxa : 0.0;
+        $valAnualPadrao = $associacao ? (float) $associacao->val_anual : 0.0;
 
         $transacoes = $ofx->transacoes()
             ->where('val_transacao', '>', 0) // apenas créditos/recebimentos
@@ -189,6 +191,12 @@ class OfxParserService
 
             foreach ($porMes as $anoMes => $itens) {
                 [$ano, $mes] = explode('-', $anoMes);
+
+                $dataRef = sprintf('%04d-%02d-01', (int) $ano, (int) $mes);
+                $taxaVigente = $associacao ? $associacao->getTaxaVigenteEm($dataRef) : null;
+
+                $valTaxa = $taxaVigente ? (float) $taxaVigente->val_taxa : $valTaxaPadrao;
+                $valAnual = $taxaVigente ? (float) $taxaVigente->val_anual : $valAnualPadrao;
 
                 $total = $itens->sum('val_transacao');
 

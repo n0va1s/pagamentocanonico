@@ -44,6 +44,11 @@ class VincularMembro extends Command
                 // Vinculando Transacoes (opcional mas recomendado para consistência)
                 $transacoesQuery = Transacao::withoutGlobalScope('associacao')
                     ->whereNull('idt_membro')
+                    ->when($membro->idt_associacao, function ($q) use ($membro) {
+                        $q->whereHas('ofx', function ($ofxQ) use ($membro) {
+                            $ofxQ->where('idt_associacao', $membro->idt_associacao);
+                        });
+                    })
                     ->where(function ($query) use ($membro, $membroCpf) {
                         $query->where('nom_pessoa', $membro->nom_membro);
                         $query->orWhere('des_transacao', 'LIKE', '%' . $membro->nom_membro . '%');
