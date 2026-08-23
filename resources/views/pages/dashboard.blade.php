@@ -292,8 +292,9 @@ new #[Title('Dashboard')] class extends Component {
             $joinedYear = (int) $membro->created_at->format('Y');
             $joinedMonth = (int) $membro->created_at->format('n');
             
-            $valTaxa = (float) ($membro->associacao?->val_taxa ?? 0);
-            $valAnual = (float) ($membro->associacao?->val_anual ?? 0);
+            $taxaVigente = $membro->associacao?->getTaxaVigenteEm();
+            $valTaxa = (float) ($taxaVigente?->val_taxa ?? 0);
+            $valAnual = (float) ($taxaVigente?->val_anual ?? 0);
             
             $pagos = $pagosPorMembro->get($membro->idt_membro, collect());
             $totalPagoAno = (float) $pagos->sum('val_total');
@@ -390,8 +391,9 @@ new #[Title('Dashboard')] class extends Component {
             $joinedYear = (int) $membro->created_at->format('Y');
             $joinedMonth = (int) $membro->created_at->format('n');
             
-            $valTaxa = (float) ($membro->associacao?->val_taxa ?? 0);
-            $valAnual = (float) ($membro->associacao?->val_anual ?? 0);
+            $taxaVigente = $membro->associacao?->getTaxaVigenteEm();
+            $valTaxa = (float) ($taxaVigente?->val_taxa ?? 0);
+            $valAnual = (float) ($taxaVigente?->val_anual ?? 0);
             
             $hasInadimplencia = false;
 
@@ -714,9 +716,10 @@ new #[Title('Dashboard')] class extends Component {
                             <x-select-associacao wire:model.live="selectedAssociacaoId" class="w-full sm:w-64" :show-all-option="$isAdmin" :disabled="!$isAdmin" />
                             @if($selectedAssociacao)
                                 <div class="flex items-center gap-3 text-xs text-neutral-600 dark:text-neutral-400 mt-1">
-                                    <span>Taxa mensal: <strong class="text-neutral-800 dark:text-neutral-200">R$ {{ number_format($selectedAssociacao->val_taxa ?? 0, 2, ',', '.') }}</strong></span>
+                                    @php $taxaVigenteSelected = $selectedAssociacao?->getTaxaVigenteEm(); @endphp
+                                    <span>Taxa mensal: <strong class="text-neutral-800 dark:text-neutral-200">R$ {{ number_format($taxaVigenteSelected?->val_taxa ?? 0, 2, ',', '.') }}</strong></span>
                                     <span>•</span>
-                                    <span>Anuidade: <strong class="text-neutral-800 dark:text-neutral-200">R$ {{ number_format($selectedAssociacao->val_anual ?? 0, 2, ',', '.') }}</strong></span>
+                                    <span>Anuidade: <strong class="text-neutral-800 dark:text-neutral-200">R$ {{ number_format($taxaVigenteSelected?->val_anual ?? 0, 2, ',', '.') }}</strong></span>
                                 </div>
                             @endif
                         </div>

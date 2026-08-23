@@ -21,8 +21,9 @@ new class extends Component {
             $this->novaAssociacaoNome = $associacao->nom_associacao;
             $this->novaAssociacaoTelefone = $associacao->tel_contato ?? '';
             $this->novaAssociacaoPix = $associacao->chave_pix ?? '';
-            $this->novaAssociacaoTaxa = $associacao->val_taxa;
-            $this->novaAssociacaoAnual = $associacao->val_anual;
+            $taxaVigente = $associacao->getTaxaVigenteEm();
+            $this->novaAssociacaoTaxa = $taxaVigente?->val_taxa;
+            $this->novaAssociacaoAnual = $taxaVigente?->val_anual;
         }
     }
 
@@ -48,16 +49,35 @@ new class extends Component {
             'nom_associacao' => $this->novaAssociacaoNome,
             'tel_contato' => $this->novaAssociacaoTelefone,
             'chave_pix' => $this->novaAssociacaoPix,
-            'val_taxa' => $this->novaAssociacaoTaxa ?: null,
-            'val_anual' => $this->novaAssociacaoAnual ?: null,
         ];
+
+        $isNew = !$this->associacao?->exists;
 
         if ($this->associacao?->exists) {
             $this->associacao->update($dados);
-            \Flux::toast(variant: 'success', text: __('messages.alerts.success.saved'));
+            $associacao = $this->associacao;
         } else {
-            Associacao::create($dados);
-            \Flux::toast(variant: 'success', text: __('messages.alerts.success.saved'));
+            $associacao = Associacao::create($dados);
+        }
+
+        $taxaVigente = $associacao->getTaxaVigenteEm();
+        $novaTaxa = $this->novaAssociacaoTaxa ?: null;
+        $novaAnual = $this->novaAssociacaoAnual ?: null;
+
+        if (!$taxaVigente || $taxaVigente->val_taxa != $novaTaxa || $taxaVigente->val_anual != $novaAnual) {
+            if ($taxaVigente) {
+                $taxaVigente->update(['dat_fim' => now()->subDay()]);
+            }
+            $associacao->taxas()->create([
+                'val_taxa' => $novaTaxa,
+                'val_anual' => $novaAnual,
+                'dat_inicio' => now(),
+            ]);
+        }
+
+        \Flux::toast(variant: 'success', text: __('messages.alerts.success.saved'));
+
+        if ($isNew) {
             $this->redirectRoute('associacoes.index', navigate: true);
         }
     }

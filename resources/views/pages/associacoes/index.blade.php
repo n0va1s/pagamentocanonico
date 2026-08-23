@@ -112,16 +112,17 @@ new #[Title('Cadastro de Associações')] class extends Component {
                                     <span class="font-mono text-neutral-800 dark:text-neutral-200 truncate select-all">{{ $assoc->chave_pix }}</span>
                                 </div>
                             @endif
-                            @if($assoc->val_taxa)
-                                <div class="flex justify-between">
-                                    <span class="text-neutral-400 dark:text-neutral-500">Mensalidade:</span>
-                                    <span class="font-semibold text-neutral-800 dark:text-neutral-200">R$ {{ number_format($assoc->val_taxa, 2, ',', '.') }}</span>
+                            @php $taxaVigenteAssoc = $assoc->getTaxaVigenteEm(); @endphp
+                            @if($taxaVigenteAssoc?->val_taxa)
+                                <div class="flex justify-between items-center text-sm">
+                                    <span class="text-neutral-500">Taxa Mensal</span>
+                                    <span class="font-semibold text-neutral-800 dark:text-neutral-200">R$ {{ number_format($taxaVigenteAssoc->val_taxa, 2, ',', '.') }}</span>
                                 </div>
                             @endif
-                            @if($assoc->val_anual)
-                                <div class="flex justify-between">
-                                    <span class="text-neutral-400 dark:text-neutral-500">Anuidade:</span>
-                                    <span class="font-semibold text-neutral-800 dark:text-neutral-200">R$ {{ number_format($assoc->val_anual, 2, ',', '.') }}</span>
+                            @if($taxaVigenteAssoc?->val_anual)
+                                <div class="flex justify-between items-center text-sm">
+                                    <span class="text-neutral-500">Anuidade</span>
+                                    <span class="font-semibold text-neutral-800 dark:text-neutral-200">R$ {{ number_format($taxaVigenteAssoc->val_anual, 2, ',', '.') }}</span>
                                 </div>
                             @endif
                         </div>

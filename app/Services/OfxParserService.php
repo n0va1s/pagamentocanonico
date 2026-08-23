@@ -170,8 +170,9 @@ class OfxParserService
     private function gerarResumosMensais(Ofx $ofx): void
     {
         $associacao = \App\Models\Associacao::find($ofx->idt_associacao);
-        $valTaxaPadrao = $associacao ? (float) $associacao->val_taxa : 0.0;
-        $valAnualPadrao = $associacao ? (float) $associacao->val_anual : 0.0;
+        $taxaVigentePadrao = $associacao ? $associacao->getTaxaVigenteEm() : null;
+        $valTaxaPadrao = $taxaVigentePadrao ? (float) $taxaVigentePadrao->val_taxa : 0.0;
+        $valAnualPadrao = $taxaVigentePadrao ? (float) $taxaVigentePadrao->val_anual : 0.0;
 
         $transacoes = $ofx->transacoes()
             ->where('val_transacao', '>', 0) // apenas créditos/recebimentos
