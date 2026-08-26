@@ -149,6 +149,69 @@ new #[Title('Dashboard')] class extends Component {
         $this->reset(['contactMessage']);
     }
 
+    public function atualizarPagamentos(): void
+    {
+        $user = auth()->user();
+        if (!$user->isAdmin() && !$user->isDiretor()) {
+            \Flux::toast(variant: 'danger', text: 'Sem permissão.');
+            return;
+        }
+
+        $associacaoId = $this->selectedAssociacaoId;
+        $membrosQuery = \App\Models\Membro::query();
+        if ($associacaoId) {
+            $membrosQuery->where('idt_associacao', $associacaoId);
+        }
+        $membros = $membrosQuery->get();
+
+        $totalResumosAfetados = 0;
+        $totalTransacoesAfetadas = 0;
+
+        \Illuminate\Support\Facades\DB::beginTransaction();
+        try {
+            foreach ($membros as $membro) {
+                $membroCpf = $membro->num_cpf_membro ? preg_replace('/\D/', '', $membro->num_cpf_membro) : null;
+                
+                if (!$membroCpf) {
+                    continue; // Pula membros sem CPF, já que a busca é estrita
+                }
+
+                $transacoesQuery = \App\Models\Transacao::withoutGlobalScope('associacao')
+                    ->whereNull('idt_membro')
+                    ->when($membro->idt_associacao, function ($q) use ($membro) {
+                        $q->whereHas('ofx', function ($ofxQ) use ($membro) {
+                            $ofxQ->withoutGlobalScope('associacao')->where('idt_associacao', $membro->idt_associacao);
+                        });
+                    })
+                    ->where(function ($query) use ($membroCpf) {
+                        $query->whereRaw("REPLACE(REPLACE(num_cpf_pagador, '.', ''), '-', '') = ?", [$membroCpf]);
+                        $query->orWhereRaw("REPLACE(REPLACE(num_cpf_pagador, '.', ''), '-', '') LIKE ?", ['%'.$membroCpf]);
+                    });
+
+                $transacoes = $transacoesQuery->get();
+                $afetadosTransacao = $transacoesQuery->update([
+                    'idt_membro' => $membro->idt_membro,
+                ]);
+
+                $totalTransacoesAfetadas += $afetadosTransacao;
+
+                $idtResumos = $transacoes->pluck('idt_resumo')->filter()->unique();
+                if ($idtResumos->isNotEmpty()) {
+                    $afetadosResumo = \App\Models\Resumo::withoutGlobalScope('associacao')
+                        ->whereIn('idt_resumo', $idtResumos)
+                        ->update(['idt_membro' => $membro->idt_membro]);
+                    
+                    $totalResumosAfetados += $afetadosResumo;
+                }
+            }
+
+            \Illuminate\Support\Facades\DB::commit();
+            \Flux::toast(variant: 'success', text: "Atualização concluída: {$totalTransacoesAfetadas} transações vinculadas.");
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\DB::rollBack();
+            \Flux::toast(variant: 'danger', text: "Erro ao atualizar pagamentos: " . $e->getMessage());
+        }
+    }
 
     public function with(): array
     {
@@ -287,8 +350,15 @@ new #[Title('Dashboard')] class extends Component {
 
         $totalAdimplentes = 0;
         $totalInadimplentes = 0;
+        $totalIsentos = 0;
 
         foreach ($membrosAtivos as $membro) {
+            $isHonorario = $membro->tip_associado === \App\Enums\Perfil::HONORARIO || $membro->tip_associado?->value === 'honorario';
+            if ($isHonorario) {
+                $totalIsentos++;
+                continue;
+            }
+
             $joinedYear = (int) $membro->created_at->format('Y');
             $joinedMonth = (int) $membro->created_at->format('n');
             
@@ -391,6 +461,8 @@ new #[Title('Dashboard')] class extends Component {
             $joinedYear = (int) $membro->created_at->format('Y');
             $joinedMonth = (int) $membro->created_at->format('n');
             
+            $isHonorario = $membro->tip_associado === \App\Enums\Perfil::HONORARIO || $membro->tip_associado?->value === 'honorario';
+            
             $taxaVigente = $membro->associacao?->getTaxaVigenteEm();
             $valTaxa = (float) ($taxaVigente?->val_taxa ?? 0);
             $valAnual = (float) ($taxaVigente?->val_anual ?? 0);
@@ -437,7 +509,9 @@ new #[Title('Dashboard')] class extends Component {
                 $totaisPorMes[$mesRef->num_ano . '-' . $mesRef->num_mes]['identificado'] += $valor;
             }
             
-            if ($valAnual > 0 && $linha['total'] >= $valAnual) {
+            if ($isHonorario) {
+                $linha['situacao'] = 'Isento';
+            } elseif ($valAnual > 0 && $linha['total'] >= $valAnual) {
                 $linha['situacao'] = 'Adimplente';
             } elseif ($hasInadimplencia) {
                 $linha['situacao'] = 'Inadimplente';
@@ -494,6 +568,7 @@ new #[Title('Dashboard')] class extends Component {
             'nomesMeses' => $nomesMeses,
             'totalAdimplentes' => $totalAdimplentes,
             'totalInadimplentes' => $totalInadimplentes,
+            'totalIsentos' => $totalIsentos,
             'totalMembrosAtivos' => $totalMembrosAtivos,
         ];
     }
@@ -754,10 +829,18 @@ new #[Title('Dashboard')] class extends Component {
                         </div>
                     </div>
                 </div>
+
+                <div class="flex items-center w-full sm:w-auto mt-4 sm:mt-0">
+                    <button wire:click="atualizarPagamentos" wire:loading.attr="disabled" class="flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto disabled:opacity-50">
+                        <flux:icon name="arrow-path" class="size-4" wire:loading.class="animate-spin" />
+                        <span wire:loading.remove>Atualizar Pagamentos</span>
+                        <span wire:loading>Atualizando...</span>
+                    </button>
+                </div>
             </div>
 
             <!-- Cards de Estatísticas Unificados -->
-            <div class="grid auto-rows-min gap-4 md:grid-cols-3 lg:grid-cols-6 mb-6">
+            <div class="grid auto-rows-min gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 mb-6">
                 <flux:card class="flex flex-col justify-between p-5">
                     <div class="flex items-center justify-between">
                         <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Total Recebido</p>
@@ -811,6 +894,17 @@ new #[Title('Dashboard')] class extends Component {
                     </div>
                     <p class="mt-2 text-2xl font-bold text-red-600">{{ $totalInadimplentes }}</p>
                     <p class="mt-1 text-[11px] text-neutral-500 dark:text-neutral-400">Quantidade de membros com pendências de pagamento no período (ano)</p>
+                </flux:card>
+
+                <flux:card class="flex flex-col justify-between p-5">
+                    <div class="flex items-center justify-between">
+                        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Isentos</p>
+                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
+                            <flux:icon name="star" class="size-4" />
+                        </div>
+                    </div>
+                    <p class="mt-2 text-2xl font-bold text-blue-600">{{ $totalIsentos }}</p>
+                    <p class="mt-1 text-[11px] text-neutral-500 dark:text-neutral-400">Membros honorários isentos de pagamento</p>
                 </flux:card>
 
                 <flux:card class="flex flex-col justify-between p-5">
@@ -881,6 +975,10 @@ new #[Title('Dashboard')] class extends Component {
                                                 @if($row['situacao'] === 'Adimplente')
                                                     <span class="inline-flex items-center gap-1 rounded bg-green-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-green-700 dark:bg-green-900/30 dark:text-green-400">
                                                         <flux:icon name="check-circle" class="size-3" /> Adimplente
+                                                    </span>
+                                                @elseif($row['situacao'] === 'Isento')
+                                                    <span class="inline-flex items-center gap-1 rounded bg-blue-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                                                        <flux:icon name="star" class="size-3" /> Isento
                                                     </span>
                                                 @else
                                                     <span class="inline-flex items-center gap-1 rounded bg-red-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-red-700 dark:bg-red-900/30 dark:text-red-400">
