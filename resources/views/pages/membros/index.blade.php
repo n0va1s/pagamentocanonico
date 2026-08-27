@@ -77,7 +77,7 @@ new #[Title('Membros')] class extends Component {
     }
 }; ?>
 
-<div class="space-y-6 p-6 max-w-7xl mx-auto" x-data="{}" x-on:open-wa-link.window="window.open($event.detail.url, '_blank')">
+<div class="space-y-6 p-6 max-w-7xl mx-auto" x-data="{ showFilters: false }" x-on:open-wa-link.window="window.open($event.detail.url, '_blank')">
 
     {{-- Cabeçalho --}}
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -97,32 +97,43 @@ new #[Title('Membros')] class extends Component {
     </div>
 
     {{-- Filtros --}}
-    <flux:card class="flex flex-col sm:flex-row gap-3">
-        <div class="flex-1">
-            <flux:input
-                 wire:model.live.debounce.300ms="busca"
-                 placeholder="Buscar por nome ou e-mail..."
-                 icon="magnifying-glass"
-                 clearable
-                 aria-label="Buscar membros"
-            />
+    <div>
+        <div class="flex gap-4 mb-4">
+            <button @click="showFilters = !showFilters" class="flex items-center gap-2 text-sm font-medium text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100 transition-colors">
+                <flux:icon name="funnel" class="size-4" />
+                <span x-text="showFilters ? 'Ocultar Filtros' : 'Mostrar Filtros'">Mostrar Filtros</span>
+            </button>
         </div>
-        @if(auth()->user()->isAdmin())
-            <div class="sm:w-60">
-                <x-select-associacao wire:model.live="selectedAssociacaoId" aria-label="Associação" :show-all-option="true" />
-            </div>
-        @endif
-        <div class="sm:w-52">
-            <flux:select wire:model.live="tip_associado" aria-label="Tipo de associado">
-                <flux:select.option value="">Todos os tipos</flux:select.option>
-                @foreach ($tiposAssociado as $tipo)
-                    <flux:select.option value="{{ $tipo->value }}">
-                        {{ $tipo->label() }}
-                    </flux:select.option>
-                @endforeach
-            </flux:select>
+        
+        <div x-show="showFilters" style="display: none;">
+            <flux:card class="flex flex-col sm:flex-row gap-3">
+                <div class="flex-1">
+                    <flux:input
+                         wire:model.live.debounce.300ms="busca"
+                         placeholder="Buscar por nome ou e-mail..."
+                         icon="magnifying-glass"
+                         clearable
+                         aria-label="Buscar membros"
+                    />
+                </div>
+                @if(auth()->user()->isAdmin())
+                    <div class="sm:w-60">
+                        <x-select-associacao wire:model.live="selectedAssociacaoId" aria-label="Associação" :show-all-option="true" />
+                    </div>
+                @endif
+                <div class="sm:w-52">
+                    <flux:select wire:model.live="tip_associado" aria-label="Tipo de associado">
+                        <flux:select.option value="">Todos os tipos</flux:select.option>
+                        @foreach ($tiposAssociado as $tipo)
+                            <flux:select.option value="{{ $tipo->value }}">
+                                {{ $tipo->label() }}
+                            </flux:select.option>
+                        @endforeach
+                    </flux:select>
+                </div>
+            </flux:card>
         </div>
-    </flux:card>
+    </div>
 
     {{-- Lista/Cards --}}
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

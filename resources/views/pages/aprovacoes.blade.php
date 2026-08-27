@@ -54,7 +54,7 @@ new #[Title('Aprovações Pendentes')] class extends Component {
     }
 }; ?>
 
-<div class="space-y-6 p-6 max-w-7xl mx-auto">
+<div class="space-y-6 p-6 max-w-7xl mx-auto" x-data="{ showFilters: false }">
     {{-- Header --}}
     <div class="flex items-center justify-between">
         <div>
@@ -69,11 +69,22 @@ new #[Title('Aprovações Pendentes')] class extends Component {
 
     @if(auth()->user()->isAdmin())
         {{-- Filtros --}}
-        <flux:card class="flex flex-col sm:flex-row gap-3">
-            <div class="sm:w-72">
-                <x-select-associacao wire:model.live="selectedAssociacaoId" aria-label="Associação" :show-all-option="true" />
+        <div>
+            <div class="flex gap-4 mb-4">
+                <button @click="showFilters = !showFilters" class="flex items-center gap-2 text-sm font-medium text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100 transition-colors">
+                    <flux:icon name="funnel" class="size-4" />
+                    <span x-text="showFilters ? 'Ocultar Filtros' : 'Mostrar Filtros'">Mostrar Filtros</span>
+                </button>
             </div>
-        </flux:card>
+            
+            <div x-show="showFilters" style="display: none;">
+                <flux:card class="flex flex-col sm:flex-row gap-3">
+                    <div class="sm:w-72">
+                        <x-select-associacao wire:model.live="selectedAssociacaoId" aria-label="Associação" :show-all-option="true" />
+                    </div>
+                </flux:card>
+            </div>
+        </div>
     @endif
 
     {{-- Lista/Cards --}}

@@ -187,7 +187,7 @@ new class extends Component {
     }
 }; ?>
 
-<div class="space-y-6 p-6 max-w-7xl mx-auto">
+<div class="space-y-6 p-6 max-w-7xl mx-auto" x-data="{ showFilters: false }">
     <div class="pc-page-header">
         <div>
             <h1 class="text-2xl font-bold text-neutral-800 dark:text-neutral-100 flex items-center gap-2">
@@ -198,45 +198,56 @@ new class extends Component {
     </div>
 
     {{-- Filtros Padronizados --}}
-    <div class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-zinc-900 mb-6">
-        <div class="flex flex-wrap items-center gap-4 w-full sm:w-auto">
-            <div class="flex items-center gap-3">
-                <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
-                    <flux:icon name="building-office-2" class="size-5" />
-                </div>
-                <div class="flex flex-col gap-1 flex-1 sm:flex-initial">
-                    <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Associação Selecionada</p>
-                    <x-select-associacao wire:model.live="selectedAssociacaoId" class="w-full sm:w-64" :show-all-option="$isAdmin" :disabled="!$isAdmin" />
-                </div>
-            </div>
+    <div>
+        <div class="flex gap-4 mb-4">
+            <button @click="showFilters = !showFilters" class="flex items-center gap-2 text-sm font-medium text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100 transition-colors">
+                <flux:icon name="funnel" class="size-4" />
+                <span x-text="showFilters ? 'Ocultar Filtros' : 'Mostrar Filtros'">Mostrar Filtros</span>
+            </button>
+        </div>
+        
+        <div x-show="showFilters" style="display: none;">
+            <div class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-zinc-900 mb-6">
+                <div class="flex flex-wrap items-center gap-4 w-full sm:w-auto">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
+                            <flux:icon name="building-office-2" class="size-5" />
+                        </div>
+                        <div class="flex flex-col gap-1 flex-1 sm:flex-initial">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Associação Selecionada</p>
+                            <x-select-associacao wire:model.live="selectedAssociacaoId" class="w-full sm:w-64" :show-all-option="$isAdmin" :disabled="!$isAdmin" />
+                        </div>
+                    </div>
 
-            <div class="flex items-center gap-3 border-t sm:border-t-0 sm:border-l border-neutral-200 dark:border-neutral-700 pt-4 sm:pt-0 sm:pl-4">
-                <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
-                    <flux:icon name="calendar" class="size-5" />
-                </div>
-                <div class="flex flex-col gap-1 w-full sm:w-36">
-                    <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Ano</p>
-                    <flux:select wire:model.live="selectedYear" class="w-full">
-                        <flux:select.option value="">Todos os Anos</flux:select.option>
-                        @foreach($availableYears as $y)
-                            <flux:select.option value="{{ $y }}">{{ $y }}</flux:select.option>
-                        @endforeach
-                    </flux:select>
-                </div>
-            </div>
+                    <div class="flex items-center gap-3 border-t sm:border-t-0 sm:border-l border-neutral-200 dark:border-neutral-700 pt-4 sm:pt-0 sm:pl-4">
+                        <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
+                            <flux:icon name="calendar" class="size-5" />
+                        </div>
+                        <div class="flex flex-col gap-1 w-full sm:w-36">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Ano</p>
+                            <flux:select wire:model.live="selectedYear" class="w-full">
+                                <flux:select.option value="">Todos os Anos</flux:select.option>
+                                @foreach($availableYears as $y)
+                                    <flux:select.option value="{{ $y }}">{{ $y }}</flux:select.option>
+                                @endforeach
+                            </flux:select>
+                        </div>
+                    </div>
 
-            <div class="flex items-center gap-3 border-t sm:border-t-0 sm:border-l border-neutral-200 dark:border-neutral-700 pt-4 sm:pt-0 sm:pl-4">
-                <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
-                    <flux:icon name="calendar-days" class="size-5" />
-                </div>
-                <div class="flex flex-col gap-1 w-full sm:w-40">
-                    <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Mês</p>
-                    <flux:select wire:model.live="selectedMonth" class="w-full" :disabled="!$selectedYear">
-                        <flux:select.option value="">Todos os Meses</flux:select.option>
-                        @foreach($availableMonths as $m)
-                            <flux:select.option value="{{ $m }}">{{ $nomesMeses[$m] ?? $m }}</flux:select.option>
-                        @endforeach
-                    </flux:select>
+                    <div class="flex items-center gap-3 border-t sm:border-t-0 sm:border-l border-neutral-200 dark:border-neutral-700 pt-4 sm:pt-0 sm:pl-4">
+                        <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
+                            <flux:icon name="calendar-days" class="size-5" />
+                        </div>
+                        <div class="flex flex-col gap-1 w-full sm:w-40">
+                            <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Mês</p>
+                            <flux:select wire:model.live="selectedMonth" class="w-full" :disabled="!$selectedYear">
+                                <flux:select.option value="">Todos os Meses</flux:select.option>
+                                @foreach($availableMonths as $m)
+                                    <flux:select.option value="{{ $m }}">{{ $nomesMeses[$m] ?? $m }}</flux:select.option>
+                                @endforeach
+                            </flux:select>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

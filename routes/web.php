@@ -15,9 +15,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Volt::route('/aprovacoes', 'pages.aprovacoes')->name('aprovacoes');
         Volt::route('/despesas', 'pages.despesas.index')->name('despesas');
 
-        Volt::route('/mensagens', 'mensagens.index')->name('mensagens.index');
-        Volt::route('/mensagens/criar', 'mensagens.create')->name('mensagens.create');
-        Volt::route('/mensagens/{mensagem}', 'mensagens.show')->name('mensagens.show');
+        Volt::route('/mensagens', 'pages.mensagens.index')->name('mensagens.index');
+        Volt::route('/mensagens/criar', 'pages.mensagens.create')->name('mensagens.create');
+        Volt::route('/mensagens/{mensagem}', 'pages.mensagens.show')->name('mensagens.show');
 
         Volt::route('/upload', 'pages.ofx.upload')->name('upload');
 

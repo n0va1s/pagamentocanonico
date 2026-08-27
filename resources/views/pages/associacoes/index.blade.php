@@ -46,7 +46,7 @@ new #[Title('Cadastro de Associações')] class extends Component {
     }
 }; ?>
 
-<div class="space-y-6 p-6 max-w-7xl mx-auto">
+<div class="space-y-6 p-6 max-w-7xl mx-auto" x-data="{ showFilters: false }">
     {{-- Header --}}
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -65,17 +65,28 @@ new #[Title('Cadastro de Associações')] class extends Component {
     </div>
 
     {{-- Filtros --}}
-    <flux:card class="flex flex-col sm:flex-row gap-3">
-        <div class="flex-1">
-            <flux:input
-                wire:model.live.debounce.300ms="busca"
-                placeholder="Buscar por nome da associação..."
-                icon="magnifying-glass"
-                clearable
-                aria-label="Buscar associações"
-            />
+    <div>
+        <div class="flex gap-4 mb-4">
+            <button @click="showFilters = !showFilters" class="flex items-center gap-2 text-sm font-medium text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100 transition-colors">
+                <flux:icon name="funnel" class="size-4" />
+                <span x-text="showFilters ? 'Ocultar Filtros' : 'Mostrar Filtros'">Mostrar Filtros</span>
+            </button>
         </div>
-    </flux:card>
+        
+        <div x-show="showFilters" style="display: none;">
+            <flux:card class="flex flex-col sm:flex-row gap-3">
+                <div class="flex-1">
+                    <flux:input
+                        wire:model.live.debounce.300ms="busca"
+                        placeholder="Buscar por nome da associação..."
+                        icon="magnifying-glass"
+                        clearable
+                        aria-label="Buscar associações"
+                    />
+                </div>
+            </flux:card>
+        </div>
+    </div>
 
     {{-- Lista/Cards --}}
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

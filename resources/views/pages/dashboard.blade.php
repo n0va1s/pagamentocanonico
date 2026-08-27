@@ -779,145 +779,140 @@ new #[Title('Dashboard')] class extends Component {
                 @endif
             </div>
         @else
-            <!-- Filtros Unificados (Admin e Diretor) -->
-            <div class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-zinc-900 mb-6">
-                <div class="flex flex-wrap items-center gap-4 w-full sm:w-auto">
-                    <div class="flex items-center gap-3">
-                        <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
-                            <flux:icon name="building-office-2" class="size-5" />
-                        </div>
-                        <div class="flex flex-col gap-1 flex-1 sm:flex-initial">
-                            <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Associação Selecionada</p>
-                            <x-select-associacao wire:model.live="selectedAssociacaoId" class="w-full sm:w-64" :show-all-option="$isAdmin" :disabled="!$isAdmin" />
-                            @if($selectedAssociacao)
-                                <div class="flex items-center gap-3 text-xs text-neutral-600 dark:text-neutral-400 mt-1">
-                                    @php $taxaVigenteSelected = $selectedAssociacao?->getTaxaVigenteEm(); @endphp
-                                    <span>Taxa mensal: <strong class="text-neutral-800 dark:text-neutral-200">R$ {{ number_format($taxaVigenteSelected?->val_taxa ?? 0, 2, ',', '.') }}</strong></span>
-                                    <span>•</span>
-                                    <span>Anuidade: <strong class="text-neutral-800 dark:text-neutral-200">R$ {{ number_format($taxaVigenteSelected?->val_anual ?? 0, 2, ',', '.') }}</strong></span>
-                                </div>
-                            @endif
-                        </div>
-                    </div>
-
-                    <div class="flex items-center gap-3 border-t sm:border-t-0 sm:border-l border-neutral-200 dark:border-neutral-700 pt-4 sm:pt-0 sm:pl-4">
-                        <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
-                            <flux:icon name="calendar" class="size-5" />
-                        </div>
-                        <div class="flex flex-col gap-1 w-full sm:w-36">
-                            <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Ano</p>
-                            <flux:select wire:model.live="selectedYear" class="w-full">
-                                @foreach($availableYears as $y)
-                                    <flux:select.option value="{{ $y }}">{{ $y }}</flux:select.option>
-                                @endforeach
-                            </flux:select>
-                        </div>
-                    </div>
-
-                    <div class="flex items-center gap-3 border-t sm:border-t-0 sm:border-l border-neutral-200 dark:border-neutral-700 pt-4 sm:pt-0 sm:pl-4">
-                        <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
-                            <flux:icon name="calendar-days" class="size-5" />
-                        </div>
-                        <div class="flex flex-col gap-1 w-full sm:w-40">
-                            <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Mês</p>
-                            <flux:select wire:model.live="selectedMonth" class="w-full">
-                                <flux:select.option value="">Todos os Meses</flux:select.option>
-                                @foreach($availableMonths as $m)
-                                    <flux:select.option value="{{ $m }}">{{ $nomesMeses[$m] ?? $m }}</flux:select.option>
-                                @endforeach
-                            </flux:select>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="flex items-center w-full sm:w-auto mt-4 sm:mt-0">
-                    <button wire:click="atualizarPagamentos" wire:loading.attr="disabled" class="flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto disabled:opacity-50">
-                        <flux:icon name="arrow-path" class="size-4" wire:loading.class="animate-spin" />
-                        <span wire:loading.remove>Atualizar Pagamentos</span>
-                        <span wire:loading>Atualizando...</span>
+            <div x-data="{ showFilters: false, showCards: false }">
+                <div class="flex gap-4 mb-4">
+                    <button @click="showFilters = !showFilters" class="flex items-center gap-2 text-sm font-medium text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100 transition-colors">
+                        <flux:icon name="funnel" class="size-4" />
+                        <span x-text="showFilters ? 'Ocultar Filtros' : 'Mostrar Filtros'">Mostrar Filtros</span>
+                    </button>
+                    <button @click="showCards = !showCards" class="flex items-center gap-2 text-sm font-medium text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100 transition-colors">
+                        <flux:icon name="chart-pie" class="size-4" />
+                        <span x-text="showCards ? 'Ocultar Resumo' : 'Mostrar Resumo'">Mostrar Resumo</span>
                     </button>
                 </div>
-            </div>
 
-            <!-- Cards de Estatísticas Unificados -->
-            <div class="grid auto-rows-min gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 mb-6">
-                <flux:card class="flex flex-col justify-between p-5">
-                    <div class="flex items-center justify-between">
-                        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Total Recebido</p>
-                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-green-100 text-green-600 dark:bg-green-900/30">
-                            <flux:icon name="banknotes" class="size-4" />
+                <!-- Filtros Unificados (Admin e Diretor) -->
+                <div x-show="showFilters" style="display: none;" class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-zinc-900 mb-6">
+                    <div class="flex flex-wrap items-center gap-4 w-full sm:w-auto">
+                        <div class="flex items-center gap-3">
+                            <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
+                                <flux:icon name="building-office-2" class="size-5" />
+                            </div>
+                            <div class="flex flex-col gap-1 flex-1 sm:flex-initial">
+                                <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Associação Selecionada</p>
+                                <x-select-associacao wire:model.live="selectedAssociacaoId" class="w-full sm:w-64" :show-all-option="$isAdmin" :disabled="!$isAdmin" />
+                                @if($selectedAssociacao)
+                                    <div class="flex items-center gap-3 text-xs text-neutral-600 dark:text-neutral-400 mt-1">
+                                        @php $taxaVigenteSelected = $selectedAssociacao?->getTaxaVigenteEm(); @endphp
+                                        <span>Taxa mensal: <strong class="text-neutral-800 dark:text-neutral-200">R$ {{ number_format($taxaVigenteSelected?->val_taxa ?? 0, 2, ',', '.') }}</strong></span>
+                                        <span>•</span>
+                                        <span>Anuidade: <strong class="text-neutral-800 dark:text-neutral-200">R$ {{ number_format($taxaVigenteSelected?->val_anual ?? 0, 2, ',', '.') }}</strong></span>
+                                    </div>
+                                @endif
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-3 border-t sm:border-t-0 sm:border-l border-neutral-200 dark:border-neutral-700 pt-4 sm:pt-0 sm:pl-4">
+                            <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
+                                <flux:icon name="calendar" class="size-5" />
+                            </div>
+                            <div class="flex flex-col gap-1 w-full sm:w-36">
+                                <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Ano</p>
+                                <flux:select wire:model.live="selectedYear" class="w-full">
+                                    @foreach($availableYears as $y)
+                                        <flux:select.option value="{{ $y }}">{{ $y }}</flux:select.option>
+                                    @endforeach
+                                </flux:select>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-3 border-t sm:border-t-0 sm:border-l border-neutral-200 dark:border-neutral-700 pt-4 sm:pt-0 sm:pl-4">
+                            <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
+                                <flux:icon name="calendar-days" class="size-5" />
+                            </div>
+                            <div class="flex flex-col gap-1 w-full sm:w-40">
+                                <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Mês</p>
+                                <flux:select wire:model.live="selectedMonth" class="w-full">
+                                    <flux:select.option value="">Todos os Meses</flux:select.option>
+                                    @foreach($availableMonths as $m)
+                                        <flux:select.option value="{{ $m }}">{{ $nomesMeses[$m] ?? $m }}</flux:select.option>
+                                    @endforeach
+                                </flux:select>
+                            </div>
                         </div>
                     </div>
-                    <p class="mt-2 text-2xl font-bold text-neutral-800 dark:text-neutral-100">{{ number_format($totalRecebido,2,',','.') }}</p>
-                    <p class="mt-1 text-[11px] text-neutral-500 dark:text-neutral-400">Valor creditado na conta da associação no período (ano)</p>
-                </flux:card>
 
-                <flux:card class="flex flex-col justify-between p-5">
-                    <div class="flex items-center justify-between">
-                        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Total Pago</p>
-                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-red-100 text-red-600 dark:bg-red-900/30">
-                            <flux:icon name="arrow-trending-down" class="size-4" />
-                        </div>
+                    <div class="flex items-center w-full sm:w-auto mt-4 sm:mt-0">
+                        <button wire:click="atualizarPagamentos" wire:loading.attr="disabled" class="flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition w-full sm:w-auto disabled:opacity-50">
+                            <flux:icon name="arrow-path" class="size-4" wire:loading.class="animate-spin" />
+                            <span wire:loading.remove>Atualizar Pagamentos</span>
+                            <span wire:loading>Atualizando...</span>
+                        </button>
                     </div>
-                    <p class="mt-2 text-2xl font-bold text-red-600">{{ number_format($totalPagoDespesas,2,',','.') }}</p>
-                    <p class="mt-1 text-[11px] text-neutral-500 dark:text-neutral-400">Valor debitado na conta da associação no período (ano)</p>
-                </flux:card>
+                </div>
 
-                <flux:card class="flex flex-col justify-between p-5">
-                    <div class="flex items-center justify-between">
-                        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Não Identificado</p>
-                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-100 text-orange-600 dark:bg-orange-900/30">
-                            <flux:icon name="question-mark-circle" class="size-4" />
+                <!-- Cards de Estatísticas Unificados -->
+                <div x-show="showCards" style="display: none;" class="grid auto-rows-min gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6 mb-6">
+                    <flux:card class="flex flex-col justify-center p-4">
+                        <div class="flex items-center justify-between gap-2">
+                            <p class="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 truncate">Total Recebido</p>
+                            <div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-green-100 text-green-600 dark:bg-green-900/30">
+                                <flux:icon name="banknotes" class="size-3" />
+                            </div>
                         </div>
-                    </div>
-                    <p class="mt-2 text-2xl font-bold text-orange-600">{{ number_format($totalNaoIdentificado,2,',','.') }}</p>
-                    <p class="mt-1 text-[11px] text-neutral-500 dark:text-neutral-400">Valor creditado na conta da associação no período (ano) sem pagador identificado</p>
-                </flux:card>
+                        <p class="mt-2 text-lg font-bold text-neutral-800 dark:text-neutral-100 truncate">{{ number_format($totalRecebido,2,',','.') }}</p>
+                    </flux:card>
 
-                <flux:card class="flex flex-col justify-between p-5">
-                    <div class="flex items-center justify-between">
-                        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Adimplentes</p>
-                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-green-100 text-green-600 dark:bg-green-900/30">
-                            <flux:icon name="check-circle" class="size-4" />
+                    <flux:card class="flex flex-col justify-center p-4">
+                        <div class="flex items-center justify-between gap-2">
+                            <p class="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 truncate">Total Pago</p>
+                            <div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-red-100 text-red-600 dark:bg-red-900/30">
+                                <flux:icon name="arrow-trending-down" class="size-3" />
+                            </div>
                         </div>
-                    </div>
-                    <p class="mt-2 text-2xl font-bold text-green-600">{{ $totalAdimplentes }}</p>
-                    <p class="mt-1 text-[11px] text-neutral-500 dark:text-neutral-400">Quantidade de membros com pagamentos em dia no período (ano)</p>
-                </flux:card>
+                        <p class="mt-2 text-lg font-bold text-red-600 truncate">{{ number_format($totalPagoDespesas,2,',','.') }}</p>
+                    </flux:card>
 
-                <flux:card class="flex flex-col justify-between p-5">
-                    <div class="flex items-center justify-between">
-                        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Inadimplentes</p>
-                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-red-100 text-red-600 dark:bg-red-900/30">
-                            <flux:icon name="exclamation-triangle" class="size-4" />
+                    <flux:card class="flex flex-col justify-center p-4">
+                        <div class="flex items-center justify-between gap-2">
+                            <p class="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 truncate">Adimplentes</p>
+                            <div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-green-100 text-green-600 dark:bg-green-900/30">
+                                <flux:icon name="check-circle" class="size-3" />
+                            </div>
                         </div>
-                    </div>
-                    <p class="mt-2 text-2xl font-bold text-red-600">{{ $totalInadimplentes }}</p>
-                    <p class="mt-1 text-[11px] text-neutral-500 dark:text-neutral-400">Quantidade de membros com pendências de pagamento no período (ano)</p>
-                </flux:card>
+                        <p class="mt-2 text-lg font-bold text-green-600 truncate">{{ $totalAdimplentes }}</p>
+                    </flux:card>
 
-                <flux:card class="flex flex-col justify-between p-5">
-                    <div class="flex items-center justify-between">
-                        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Isentos</p>
-                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
-                            <flux:icon name="star" class="size-4" />
+                    <flux:card class="flex flex-col justify-center p-4">
+                        <div class="flex items-center justify-between gap-2">
+                            <p class="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 truncate">Inadimplentes</p>
+                            <div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-red-100 text-red-600 dark:bg-red-900/30">
+                                <flux:icon name="exclamation-triangle" class="size-3" />
+                            </div>
                         </div>
-                    </div>
-                    <p class="mt-2 text-2xl font-bold text-blue-600">{{ $totalIsentos }}</p>
-                    <p class="mt-1 text-[11px] text-neutral-500 dark:text-neutral-400">Membros honorários isentos de pagamento</p>
-                </flux:card>
+                        <p class="mt-2 text-lg font-bold text-red-600 truncate">{{ $totalInadimplentes }}</p>
+                    </flux:card>
 
-                <flux:card class="flex flex-col justify-between p-5">
-                    <div class="flex items-center justify-between">
-                        <p class="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Membros Ativos</p>
-                        <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-900/30">
-                            <flux:icon name="users" class="size-4" />
+                    <flux:card class="flex flex-col justify-center p-4">
+                        <div class="flex items-center justify-between gap-2">
+                            <p class="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 truncate">Isentos</p>
+                            <div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-blue-100 text-blue-600 dark:bg-blue-900/30">
+                                <flux:icon name="star" class="size-3" />
+                            </div>
                         </div>
-                    </div>
-                    <p class="mt-2 text-2xl font-bold text-blue-600">{{ $totalMembrosAtivos }}</p>
-                    <p class="mt-1 text-[11px] text-neutral-500 dark:text-neutral-400">Total de associados ativos e aprovados cadastrados</p>
-                </flux:card>
-            </div>
+                        <p class="mt-2 text-lg font-bold text-blue-600 truncate">{{ $totalIsentos }}</p>
+                    </flux:card>
+
+                    <flux:card class="flex flex-col justify-center p-4">
+                        <div class="flex items-center justify-between gap-2">
+                            <p class="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 truncate">Membros Ativos</p>
+                            <div class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-blue-100 text-blue-600 dark:bg-blue-900/30">
+                                <flux:icon name="users" class="size-3" />
+                            </div>
+                        </div>
+                        <p class="mt-2 text-lg font-bold text-blue-600 truncate">{{ $totalMembrosAtivos }}</p>
+                    </flux:card>
+                </div>
 
                 <!-- Seções Principais -->
                 <div class="space-y-6">
@@ -1028,5 +1023,6 @@ new #[Title('Dashboard')] class extends Component {
                         </div>
                     </flux:card>
                 </div>
+            </div>
         @endif
     </div>
