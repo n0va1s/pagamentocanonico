@@ -35,6 +35,7 @@ class Membro extends Model
         'tip_associado',
         'usu_autorizador',
         'ind_aprovado',
+        'dat_adesao',
         'des_telegram_chat_id',
     ];
 
@@ -52,6 +53,7 @@ class Membro extends Model
         'tip_associado' => Perfil::class,
         'ind_aprovado' => 'boolean',
         'dat_nascimento' => 'date',
+        'dat_adesao' => 'date',
     ];
 
     protected static function booted(): void

@@ -18,6 +18,7 @@ return new class extends Migration
             $table->string('des_chave_pix')->nullable();
             $table->decimal('val_taxa', 10, 2)->nullable();
             $table->decimal('val_anual', 10, 2)->nullable();
+            $table->date('dat_inicio_cobranca')->nullable()->default('2025-01-01');
             $table->timestamps();
             $table->softDeletes();
         });

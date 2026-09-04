@@ -359,9 +359,6 @@ new #[Title('Dashboard')] class extends Component {
                 continue;
             }
 
-            $joinedYear = (int) $membro->created_at->format('Y');
-            $joinedMonth = (int) $membro->created_at->format('n');
-            
             $taxaVigente = $membro->associacao?->getTaxaVigenteEm();
             $valTaxa = (float) ($taxaVigente?->val_taxa ?? 0);
             $valAnual = (float) ($taxaVigente?->val_anual ?? 0);
@@ -373,31 +370,38 @@ new #[Title('Dashboard')] class extends Component {
                 $totalAdimplentes++;
                 continue;
             }
-            
-            $isInadimplente = false;
-            for ($m = 1; $m <= $monthsToConsider; $m++) {
-                if ($joinedYear < $selectedYear || ($joinedYear === $selectedYear && $joinedMonth <= $m)) {
-                    $pagosNoMes = $pagos->where('num_mes', $m);
-                    $valorNoMes = (float) $pagosNoMes->sum('val_total');
-                    
-                    if ($valTaxa > 0) {
-                        if ($valorNoMes < $valTaxa) {
-                            $isInadimplente = true;
-                            break;
-                        }
-                    } else {
-                        if ($pagosNoMes->isEmpty()) {
-                            $isInadimplente = true;
-                            break;
-                        }
+
+            $dataAdesao = $membro->dat_adesao ? \Carbon\Carbon::parse($membro->dat_adesao) : $membro->created_at;
+            $dataInicioAssoc = $membro->associacao?->dat_inicio_cobranca 
+                ? \Carbon\Carbon::parse($membro->associacao->dat_inicio_cobranca) 
+                : \Carbon\Carbon::create(2025, 1, 1);
+
+            $dataInicioObrigacao = ($dataAdesao && $dataAdesao->greaterThan($dataInicioAssoc)) 
+                ? $dataAdesao 
+                : $dataInicioAssoc;
+
+            $startYear = (int) $dataInicioObrigacao->format('Y');
+            $startMonth = (int) $dataInicioObrigacao->format('n');
+
+            $mesesDevidos = 0;
+            if ($selectedYear >= $startYear) {
+                for ($m = 1; $m <= $monthsToConsider; $m++) {
+                    if ($startYear < $selectedYear || ($startYear === $selectedYear && $startMonth <= $m)) {
+                        $mesesDevidos++;
                     }
                 }
             }
-            
-            if ($isInadimplente) {
-                $totalInadimplentes++;
+
+            $valorEsperado = $mesesDevidos * $valTaxa;
+
+            if ($valTaxa > 0) {
+                if ($totalPagoAno >= $valorEsperado) {
+                    $totalAdimplentes++;
+                } else {
+                    $totalInadimplentes++;
+                }
             } else {
-                $totalAdimplentes++;
+                $totalPagoAno > 0 ? $totalAdimplentes++ : $totalInadimplentes++;
             }
         }
 
@@ -458,45 +462,35 @@ new #[Title('Dashboard')] class extends Component {
                 'situacao' => 'Adimplente',
             ];
             
-            $joinedYear = (int) $membro->created_at->format('Y');
-            $joinedMonth = (int) $membro->created_at->format('n');
-            
             $isHonorario = $membro->tip_associado === \App\Enums\Perfil::HONORARIO || $membro->tip_associado?->value === 'honorario';
-            
             $taxaVigente = $membro->associacao?->getTaxaVigenteEm();
             $valTaxa = (float) ($taxaVigente?->val_taxa ?? 0);
             $valAnual = (float) ($taxaVigente?->val_anual ?? 0);
-            
-            $hasInadimplencia = false;
+
+            $dataAdesao = $membro->dat_adesao ? \Carbon\Carbon::parse($membro->dat_adesao) : $membro->created_at;
+            $dataInicioAssoc = $membro->associacao?->dat_inicio_cobranca 
+                ? \Carbon\Carbon::parse($membro->associacao->dat_inicio_cobranca) 
+                : \Carbon\Carbon::create(2025, 1, 1);
+
+            $dataInicioObrigacao = ($dataAdesao && $dataAdesao->greaterThan($dataInicioAssoc)) 
+                ? $dataAdesao 
+                : $dataInicioAssoc;
+
+            $startYear = (int) $dataInicioObrigacao->format('Y');
+            $startMonth = (int) $dataInicioObrigacao->format('n');
+
+            $mesesDevidos = 0;
+            if ($selectedYear >= $startYear) {
+                for ($m = 1; $m <= $monthsToConsider; $m++) {
+                    if ($startYear < $selectedYear || ($startYear === $selectedYear && $startMonth <= $m)) {
+                        $mesesDevidos++;
+                    }
+                }
+            }
 
             foreach ($mesesDisponiveis as $mesRef) {
                 $m = $mesRef->num_mes;
-                
-                $isExpected = false;
-                if ($selectedYear < $currentYear) {
-                    if ($joinedYear < $selectedYear || ($joinedYear === $selectedYear && $joinedMonth <= $m)) {
-                        $isExpected = true;
-                    }
-                } elseif ($selectedYear === $currentYear) {
-                    if ($m <= $currentMonth && ($joinedYear < $selectedYear || ($joinedYear === $selectedYear && $joinedMonth <= $m))) {
-                        $isExpected = true;
-                    }
-                }
-
                 $valor = (float) $resumosMembro->where('num_mes', $m)->sum('val_total');
-                
-                if ($isExpected) {
-                    if ($valTaxa > 0) {
-                        if ($valor < $valTaxa) {
-                            $hasInadimplencia = true;
-                        }
-                    } else {
-                        $isPaid = $resumosMembro->where('num_mes', $m)->where('ind_pago', true)->isNotEmpty();
-                        if (!$isPaid && $valor <= 0) {
-                            $hasInadimplencia = true;
-                        }
-                    }
-                }
 
                 $linha['meses'][] = [
                     'key' => $mesRef->num_ano . '-' . $mesRef->num_mes,
@@ -509,14 +503,16 @@ new #[Title('Dashboard')] class extends Component {
                 $totaisPorMes[$mesRef->num_ano . '-' . $mesRef->num_mes]['identificado'] += $valor;
             }
             
+            $valorEsperado = $mesesDevidos * $valTaxa;
+
             if ($isHonorario) {
                 $linha['situacao'] = 'Isento';
             } elseif ($valAnual > 0 && $linha['total'] >= $valAnual) {
                 $linha['situacao'] = 'Adimplente';
-            } elseif ($hasInadimplencia) {
-                $linha['situacao'] = 'Inadimplente';
+            } elseif ($valTaxa > 0) {
+                $linha['situacao'] = ($linha['total'] >= $valorEsperado) ? 'Adimplente' : 'Inadimplente';
             } else {
-                $linha['situacao'] = 'Adimplente';
+                $linha['situacao'] = ($linha['total'] > 0) ? 'Adimplente' : 'Inadimplente';
             }
             
             $dadosDashboard[] = $linha;

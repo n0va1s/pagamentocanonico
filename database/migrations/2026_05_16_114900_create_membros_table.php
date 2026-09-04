@@ -24,6 +24,7 @@ return new class extends Migration
             $table->string('tip_associado', 50)->default('membro'); // Tipo de associação
             $table->string('usu_autorizador')->nullable();
             $table->boolean('ind_aprovado')->default(false);
+            $table->date('dat_adesao')->nullable();
             $table->string('des_telegram_chat_id', 50)->nullable();
             $table->boolean('ind_notificar_whatsapp')->default(true);
             $table->boolean('ind_notificar_email')->default(true);

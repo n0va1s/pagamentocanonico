@@ -25,8 +25,7 @@ new class extends Component {
 
     // Associação
     public string $tip_associado         = '';
-
-
+    public ?string $dat_adesao           = null;
 
     public function mount(?Membro $membro = null): void
     {
@@ -44,10 +43,12 @@ new class extends Component {
             $this->end_numero            = $membro->end_numero ?? '';
             $this->end_complemento       = $membro->end_complemento ?? '';
             $this->tip_associado         = $membro->tip_associado->value ?? '';
+            $this->dat_adesao            = $membro->dat_adesao?->format('Y-m-d') ?? ($membro->created_at?->format('Y-m-d') ?? date('Y-m-d'));
 
         } else {
             $this->idt_associacao        = auth()->user()->membro?->idt_associacao;
             $this->tip_associado         = Perfil::MEMBRO->value;
+            $this->dat_adesao            = date('Y-m-d');
         }
 
         // Auto-select association if it is empty and only 1 association exists
@@ -75,6 +76,7 @@ new class extends Component {
             'end_numero'             => ['nullable', 'string', 'max:20'],
             'end_complemento'        => ['nullable', 'string', 'max:150'],
             'tip_associado'          => ['required', Rule::enum(Perfil::class)],
+            'dat_adesao'             => ['nullable', 'date'],
         ];
     }
 
@@ -298,8 +300,8 @@ new class extends Component {
                 </flux:field>
             </div>
 
-            @if($editando)
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                @if($editando)
                 <flux:field>
                     <flux:label required for="tip_associado">Tipo de associação</flux:label>
                     <flux:select id="tip_associado" wire:model="tip_associado">
@@ -312,8 +314,18 @@ new class extends Component {
                     </flux:select>
                     <flux:error name="tip_associado" />
                 </flux:field>
+                @endif
+
+                <flux:field class="{{ !$editando ? 'md:col-span-2' : '' }}">
+                    <flux:label for="dat_adesao">Data de Adesão / Filiação</flux:label>
+                    <flux:input
+                        id="dat_adesao"
+                        type="date"
+                        wire:model="dat_adesao"
+                    />
+                    <flux:error name="dat_adesao" />
+                </flux:field>
             </div>
-            @endif
 
         </flux:card>
 

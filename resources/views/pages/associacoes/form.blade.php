@@ -12,6 +12,7 @@ new class extends Component {
     public string $novaAssociacaoPix = '';
     public ?string $novaAssociacaoTaxa = null;
     public ?string $novaAssociacaoAnual = null;
+    public ?string $novaAssociacaoInicioCobranca = '2025-01-01';
 
     public function mount(?Associacao $associacao = null): void
     {
@@ -21,6 +22,7 @@ new class extends Component {
             $this->novaAssociacaoNome = $associacao->nom_associacao;
             $this->novaAssociacaoTelefone = $associacao->tel_contato ?? '';
             $this->novaAssociacaoPix = $associacao->chave_pix ?? '';
+            $this->novaAssociacaoInicioCobranca = $associacao->dat_inicio_cobranca?->format('Y-m-d') ?? '2025-01-01';
             $taxaVigente = $associacao->getTaxaVigenteEm();
             $this->novaAssociacaoTaxa = $taxaVigente?->val_taxa;
             $this->novaAssociacaoAnual = $taxaVigente?->val_anual;
@@ -40,6 +42,7 @@ new class extends Component {
             'novaAssociacaoPix' => ['nullable', 'string', 'max:100'],
             'novaAssociacaoTaxa' => ['nullable', 'numeric', 'min:0'],
             'novaAssociacaoAnual' => ['nullable', 'numeric', 'min:0'],
+            'novaAssociacaoInicioCobranca' => ['nullable', 'date'],
         ], [
             'novaAssociacaoNome.required' => 'O nome da associação é obrigatório.',
             'novaAssociacaoNome.unique' => 'Esta associação já está cadastrada.',
@@ -49,6 +52,7 @@ new class extends Component {
             'nom_associacao' => $this->novaAssociacaoNome,
             'tel_contato' => $this->novaAssociacaoTelefone,
             'chave_pix' => $this->novaAssociacaoPix,
+            'dat_inicio_cobranca' => $this->novaAssociacaoInicioCobranca ?: null,
         ];
 
         $isNew = !$this->associacao?->exists;
@@ -115,6 +119,13 @@ new class extends Component {
                     <flux:label for="novaAssociacaoAnual">Valor da Anuidade (R$)</flux:label>
                     <flux:input id="novaAssociacaoAnual" wire:model="novaAssociacaoAnual" type="number" step="0.01" placeholder="Ex: 500.00" />
                     <flux:error name="novaAssociacaoAnual" />
+                </flux:field>
+
+                <flux:field class="md:col-span-2">
+                    <flux:label for="novaAssociacaoInicioCobranca">Início das Cobranças no Sistema (Marco Inicial)</flux:label>
+                    <flux:input id="novaAssociacaoInicioCobranca" wire:model="novaAssociacaoInicioCobranca" type="date" />
+                    <flux:description>Data a partir da qual o sistema começa a exigir mensalidades dos associados (membros antigos não terão cobranças retroativas anteriores a esta data).</flux:description>
+                    <flux:error name="novaAssociacaoInicioCobranca" />
                 </flux:field>
             </div>
         </flux:card>

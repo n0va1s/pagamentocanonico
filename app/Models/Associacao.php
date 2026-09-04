@@ -19,6 +19,11 @@ class Associacao extends Model
         'nom_associacao',
         'tel_contato',
         'des_chave_pix',
+        'dat_inicio_cobranca',
+    ];
+
+    protected $casts = [
+        'dat_inicio_cobranca' => 'date',
     ];
 
     public function membros(): HasMany
