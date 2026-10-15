@@ -2,9 +2,14 @@
 
 namespace App\Services;
 
+use App\Enums\EfeitoRegra;
+use App\Models\Associacao;
+use App\Models\Membro;
 use App\Models\Ofx;
+use App\Models\RegraClassificacao;
 use App\Models\Resumo;
 use App\Models\Transacao;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -15,6 +20,13 @@ class OfxParserService
         5 => 'Mai', 6 => 'Jun', 7 => 'Jul', 8 => 'Ago',
         9 => 'Set', 10 => 'Out', 11 => 'Nov', 12 => 'Dez',
     ];
+
+    /**
+     * CHECKNUMs que não identificam unicamente uma transação (ex.: conta da
+     * aplicação Rende Fácil, que repete em vários lançamentos). Para esses, a
+     * dedup recai sobre a chave de negócio (data+valor+tipo+cpf).
+     */
+    private const CHECKNUMS_NAO_DISCRIMINANTES = ['9903'];
 
     /**
      * Processa o arquivo OFX e persiste os dados no banco.
@@ -28,14 +40,16 @@ class OfxParserService
         $datInicio = $this->converterDataOfx($this->extrairTag($conteudo, 'DTSTART'));
         $datFim = $this->converterDataOfx($this->extrairTag($conteudo, 'DTEND'));
 
-        // Busca OFX existente pela chave lógica (conta e período)
-        $ofx = Ofx::where('idt_associacao', $idtAssociacao)
+        // Busca OFX existente pela chave lógica (associação + banco + conta).
+        // O período (dat_inicio/dat_fim) é só metadado: reimportar um recorte
+        // diferente do mesmo contexto deve reconciliar no MESMO registro Ofx.
+        $ofx = Ofx::withoutGlobalScope('associacao')
+            ->where('idt_associacao', $idtAssociacao)
+            ->where('cod_banco', $codBanco)
             ->where('num_conta', $numConta)
-            ->where('dat_inicio', $datInicio)
-            ->where('dat_fim', $datFim)
             ->first();
 
-        if (!$ofx) {
+        if (! $ofx) {
             $ofx = Ofx::create([
                 'idt_associacao' => $idtAssociacao,
                 'des_arquivo' => $nomeOriginal,
@@ -107,6 +121,12 @@ class OfxParserService
         $valorTotal = 0.0;
         $quantidade = 0;
 
+        // Carrega uma única vez as regras ATIVAS da associação (com critérios).
+        $regras = $this->carregarRegrasAtivas($ofx->idt_associacao);
+
+        // Set em memória para dedup intra-arquivo pela identidade canônica.
+        $vistasNoArquivo = [];
+
         foreach ($blocos as $bloco) {
             $datTransacao = $this->converterDataOfx($bloco['DTPOSTED'] ?? null);
 
@@ -126,17 +146,30 @@ class OfxParserService
             }
 
             $valor = (float) str_replace(',', '.', $bloco['TRNAMT'] ?? '0');
+            $tipo = $bloco['TRNTYPE'] ?? null;
+            $checknum = $bloco['CHECKNUM'] ?? null;
 
-            if (Transacao::where('num_transacao', $fitid)->exists()) {
+            $cpf = $this->extrairCpfDoMemo($bloco['MEMO'] ?? null);
+
+            // Identidade canônica da transação (dedup intra-arquivo e vs. banco).
+            $identidade = $this->identidadeCanonica($checknum, $datTransacao, $valor, $tipo, $cpf);
+
+            // Dedup intra-arquivo.
+            if (isset($vistasNoArquivo[$identidade])) {
+                continue;
+            }
+            $vistasNoArquivo[$identidade] = true;
+
+            // Dedup contra o banco (escopo associação + banco + conta).
+            if ($this->existeNoBanco($ofx, $checknum, $datTransacao, $valor, $tipo, $cpf)) {
                 continue;
             }
 
-            $cpf = $this->extrairCpfDoMemo($bloco['MEMO'] ?? null);
             $membro = null;
             if ($cpf) {
-                $membro = \App\Models\Membro::withoutGlobalScopes()
-                    ->when($ofx->idt_associacao, fn($q) => $q->where('idt_associacao', $ofx->idt_associacao))
-                    ->where(function($query) use ($cpf) {
+                $membro = Membro::withoutGlobalScopes()
+                    ->when($ofx->idt_associacao, fn ($q) => $q->where('idt_associacao', $ofx->idt_associacao))
+                    ->where(function ($query) use ($cpf) {
                         $query->whereRaw("REPLACE(REPLACE(num_cpf_membro, '.', ''), '-', '') = ?", [$cpf]);
                         if (strlen($cpf) === 14 && str_starts_with($cpf, '000')) {
                             $query->orWhereRaw("REPLACE(REPLACE(num_cpf_membro, '.', ''), '-', '') = ?", [substr($cpf, 3)]);
@@ -144,17 +177,25 @@ class OfxParserService
                     })->first();
             }
 
+            $desTransacao = $this->limparDescricao($bloco['MEMO'] ?? null);
+            $nomPessoa = $bloco['NAME'] ?? null;
+
+            // Aplica as regras de classificação ativas da associação.
+            $flags = $this->aplicarRegras($regras, $nomPessoa, $desTransacao, $checknum, $tipo);
+
             Transacao::create([
                 'idt_ofx' => $ofx->idt_ofx,
                 'idt_membro' => $membro ? $membro->idt_membro : null,
                 'num_transacao' => $fitid,
                 'dat_transacao' => $datTransacao,
-                'tip_transacao' => $bloco['TRNTYPE'] ?? null,
+                'tip_transacao' => $tipo,
                 'val_transacao' => $valor,
-                'des_transacao' => $this->limparDescricao($bloco['MEMO'] ?? null),
-                'num_check' => $bloco['CHECKNUM'] ?? null,
-                'nom_pessoa' => $bloco['NAME'] ?? null,
+                'des_transacao' => $desTransacao,
+                'num_check' => $checknum,
+                'nom_pessoa' => $nomPessoa,
                 'num_cpf_pagador' => $cpf,
+                'ind_computa_receita' => $flags['ind_computa_receita'],
+                'ind_computa_despesa' => $flags['ind_computa_despesa'],
             ]);
 
             $valorTotal += $valor;
@@ -165,21 +206,185 @@ class OfxParserService
     }
 
     /**
+     * Normaliza um valor mantendo apenas os dígitos (ex.: CHECKNUM com separador
+     * de milhar "50.552.236.870.722" -> "50552236870722").
+     */
+    private function normalizarDigitos(?string $valor): string
+    {
+        return preg_replace('/\D/', '', (string) $valor);
+    }
+
+    /**
+     * Indica se o CHECKNUM é discriminante (identifica unicamente a transação).
+     */
+    private function checknumDiscriminante(?string $checknum): bool
+    {
+        $normalizado = $this->normalizarDigitos($checknum);
+
+        return $normalizado !== '' && ! in_array($normalizado, self::CHECKNUMS_NAO_DISCRIMINANTES, true);
+    }
+
+    /**
+     * Calcula a identidade canônica de uma transação:
+     *  a) CHECKNUM normalizado, se existir e for discriminante;
+     *  b) senão, chave de negócio data|valor|tipo|cpf (mínimo data+valor+tipo).
+     */
+    private function identidadeCanonica(?string $checknum, string $datTransacao, float $valor, ?string $tipo, ?string $cpf): string
+    {
+        if ($this->checknumDiscriminante($checknum)) {
+            return 'chk:'.$this->normalizarDigitos($checknum);
+        }
+
+        return 'biz:'.implode('|', [
+            $datTransacao,
+            number_format($valor, 2, '.', ''),
+            $tipo ?? '',
+            $cpf ?? '',
+        ]);
+    }
+
+    /**
+     * Verifica se a transação já existe no banco, no escopo associação+banco+conta.
+     * Para CHECKNUM discriminante, casa o CHECKNUM normalizado contra num_transacao
+     * E num_check já gravados (ambos normalizados). Caso contrário, usa a chave de
+     * negócio data+valor+tipo+cpf.
+     */
+    private function existeNoBanco(Ofx $ofx, ?string $checknum, string $datTransacao, float $valor, ?string $tipo, ?string $cpf): bool
+    {
+        $escopo = fn ($q) => $q->where('idt_associacao', $ofx->idt_associacao)
+            ->where('cod_banco', $ofx->cod_banco)
+            ->where('num_conta', $ofx->num_conta);
+
+        $query = Transacao::withoutGlobalScope('associacao')
+            ->whereHas('ofx', function ($q) use ($escopo) {
+                $q->withoutGlobalScope('associacao');
+                $escopo($q);
+            });
+
+        if ($this->checknumDiscriminante($checknum)) {
+            $alvo = $this->normalizarDigitos($checknum);
+
+            return $query->where(function ($q) use ($alvo) {
+                $q->whereRaw("REPLACE(REPLACE(REPLACE(COALESCE(num_transacao, ''), '.', ''), '-', ''), '/', '') = ?", [$alvo])
+                    ->orWhereRaw("REPLACE(REPLACE(REPLACE(COALESCE(num_check, ''), '.', ''), '-', ''), '/', '') = ?", [$alvo]);
+            })->exists();
+        }
+
+        return $query
+            ->whereDate('dat_transacao', $datTransacao)
+            ->where('val_transacao', $valor)
+            ->where('tip_transacao', $tipo)
+            ->when(
+                $cpf !== null,
+                fn ($q) => $q->where('num_cpf_pagador', $cpf),
+                fn ($q) => $q->whereNull('num_cpf_pagador'),
+            )
+            ->exists();
+    }
+
+    /**
+     * Carrega as regras de classificação ativas da associação, com critérios.
+     *
+     * @return Collection<int, RegraClassificacao>
+     */
+    private function carregarRegrasAtivas(?int $idtAssociacao)
+    {
+        if (! $idtAssociacao) {
+            return collect();
+        }
+
+        return RegraClassificacao::with('criterios')
+            ->where('idt_associacao', $idtAssociacao)
+            ->where('ind_ativo', true)
+            ->get();
+    }
+
+    /**
+     * Avalia as regras ativas e retorna os flags de computação da transação.
+     * Uma regra casa só se TODOS os seus critérios casam (lógica E).
+     *
+     * @param  Collection<int, RegraClassificacao>  $regras
+     * @return array{ind_computa_receita: bool, ind_computa_despesa: bool}
+     */
+    private function aplicarRegras($regras, ?string $nomPessoa, ?string $desTransacao, ?string $checknum, ?string $tipo): array
+    {
+        $flags = [
+            'ind_computa_receita' => true,
+            'ind_computa_despesa' => true,
+        ];
+
+        foreach ($regras as $regra) {
+            $criterios = $regra->criterios;
+
+            if ($criterios->isEmpty()) {
+                continue;
+            }
+
+            $casaTodos = $criterios->every(
+                fn ($criterio) => $this->criterioCasa($criterio, $nomPessoa, $desTransacao, $checknum, $tipo)
+            );
+
+            if (! $casaTodos) {
+                continue;
+            }
+
+            $efeito = $regra->efeito;
+
+            if ($efeito === EfeitoRegra::EXCLUI_RECEITA || $efeito === EfeitoRegra::EXCLUI_TUDO) {
+                $flags['ind_computa_receita'] = false;
+            }
+
+            if ($efeito === EfeitoRegra::EXCLUI_DESPESA || $efeito === EfeitoRegra::EXCLUI_TUDO) {
+                $flags['ind_computa_despesa'] = false;
+            }
+        }
+
+        return $flags;
+    }
+
+    /**
+     * Avalia um único critério contra os dados da transação.
+     */
+    private function criterioCasa($criterio, ?string $nomPessoa, ?string $desTransacao, ?string $checknum, ?string $tipo): bool
+    {
+        $valMatch = (string) $criterio->val_match;
+
+        return match ($criterio->tip_match) {
+            'NOM_PESSOA' => $nomPessoa !== null
+                && str_contains(mb_strtolower($nomPessoa), mb_strtolower($valMatch)),
+            'DES_TRANSACAO' => $desTransacao !== null
+                && str_contains(mb_strtolower($desTransacao), mb_strtolower($valMatch)),
+            'CHECKNUM' => $this->normalizarDigitos($checknum) === $this->normalizarDigitos($valMatch),
+            'TIPO' => $tipo === $valMatch,
+            default => false,
+        };
+    }
+
+    /**
      * Gera ou atualiza os resumos mensais agrupados por pessoa.
      */
     private function gerarResumosMensais(Ofx $ofx): void
     {
-        $associacao = \App\Models\Associacao::find($ofx->idt_associacao);
+        $associacao = Associacao::find($ofx->idt_associacao);
         $taxaVigentePadrao = $associacao ? $associacao->getTaxaVigenteEm() : null;
         $valTaxaPadrao = $taxaVigentePadrao ? (float) $taxaVigentePadrao->val_taxa : 0.0;
         $valAnualPadrao = $taxaVigentePadrao ? (float) $taxaVigentePadrao->val_anual : 0.0;
 
+        // Recalcula os resumos avulsos (sem membro) do zero: eles são agrupados
+        // por descrição e não têm discriminante na chave única do resumo, então
+        // apagá-los antes de recriar evita duplicação no reimport.
+        Resumo::withoutGlobalScope('associacao')
+            ->where('idt_ofx', $ofx->idt_ofx)
+            ->whereNull('idt_membro')
+            ->delete();
+
         $transacoes = $ofx->transacoes()
             ->where('val_transacao', '>', 0) // apenas créditos/recebimentos
+            ->where('ind_computa_receita', true) // ignora o que foi excluído da receita
             ->get();
 
         $porPessoa = $transacoes->groupBy(function ($t) {
-            return $t->idt_membro ? 'membro_' . $t->idt_membro : 'nome_' . $t->des_transacao;
+            return $t->idt_membro ? 'membro_'.$t->idt_membro : 'nome_'.$t->des_transacao;
         });
 
         foreach ($porPessoa as $chave => $transacoesPessoa) {
@@ -226,6 +431,11 @@ class OfxParserService
                         ]
                     );
                 } else {
+                    // Avulsos (sem membro): como o agrupamento é por descrição e
+                    // não há coluna para discriminá-los na chave única do resumo,
+                    // os resumos avulsos deste OFX são recalculados do zero no
+                    // início deste método (ver limparResumosAvulsos), de modo que
+                    // o create aqui não dobra valores no reimport.
                     $resumo = Resumo::create([
                         'idt_ofx' => $ofx->idt_ofx,
                         'idt_membro' => null,
