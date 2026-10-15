@@ -136,7 +136,15 @@ class OfxParserService
             return DB::transaction($callback);
         }
 
-        $this->adquirirLockNomeado($nomeLock);
+        if (! $this->adquirirLockNomeado($nomeLock)) {
+            // Fail-closed: sem o lock confirmado, não abrir a transação para
+            // não permitir importação concorrente sem serialização (timeout=0
+            // ou erro=NULL no GET_LOCK). O chamador pode retentar a importação.
+            throw new \RuntimeException(
+                'Não foi possível obter o lock de importação do contexto OFX; '.
+                'outra importação pode estar em andamento. Tente novamente.'
+            );
+        }
 
         try {
             return DB::transaction($callback);
@@ -165,11 +173,17 @@ class OfxParserService
     }
 
     /**
-     * Adquire um lock nomeado de sessão (MySQL `GET_LOCK`), bloqueando até obtê-lo.
+     * Adquire um lock nomeado de sessão (MySQL `GET_LOCK`).
+     *
+     * Retorna true somente quando o lock foi efetivamente adquirido (GET_LOCK
+     * devolve 1). Em timeout (0) ou erro (NULL) retorna false, para que o
+     * chamador não prossiga sem exclusão mútua.
      */
-    private function adquirirLockNomeado(string $nome): void
+    private function adquirirLockNomeado(string $nome): bool
     {
-        DB::selectOne('SELECT GET_LOCK(?, ?) AS obtido', [$nome, 10]);
+        $resultado = DB::selectOne('SELECT GET_LOCK(?, ?) AS obtido', [$nome, 10]);
+
+        return $resultado !== null && (int) $resultado->obtido === 1;
     }
 
     /**
