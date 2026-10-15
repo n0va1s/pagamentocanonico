@@ -40,53 +40,64 @@ class OfxParserService
         $datInicio = $this->converterDataOfx($this->extrairTag($conteudo, 'DTSTART'));
         $datFim = $this->converterDataOfx($this->extrairTag($conteudo, 'DTEND'));
 
-        // Busca OFX existente pela chave lógica (associação + banco + conta).
-        // O período (dat_inicio/dat_fim) é só metadado: reimportar um recorte
-        // diferente do mesmo contexto deve reconciliar no MESMO registro Ofx.
-        $ofx = Ofx::withoutGlobalScope('associacao')
-            ->where('idt_associacao', $idtAssociacao)
-            ->where('cod_banco', $codBanco)
-            ->where('num_conta', $numConta)
-            ->first();
-
-        if (! $ofx) {
-            $ofx = Ofx::create([
-                'idt_associacao' => $idtAssociacao,
-                'des_arquivo' => $nomeOriginal,
-                'cod_banco' => $codBanco,
-                'num_conta' => $numConta,
-                'dat_inicio' => $datInicio,
-                'dat_fim' => $datFim,
-                'qtd_transacao' => 0,
-                'val_total' => 0,
-            ]);
-        } else {
-            // Atualiza o nome do arquivo para o mais recente
-            $ofx->update(['des_arquivo' => $nomeOriginal]);
-        }
-
-        DB::beginTransaction();
-
+        // Todo o fluxo (busca/criação do OFX, dedup e resumos) corre em UMA
+        // transação. Importações concorrentes do mesmo contexto são serializadas
+        // por um lock na associação (lockForUpdate), evitando que dois processos
+        // observem a ausência do OFX e criem registros duplicados, ou que pares
+        // exists()/create() de transações se intercalem.
         try {
-            $this->salvarTransacoes($ofx, $conteudo);
+            return DB::transaction(function () use (
+                $idtAssociacao, $codBanco, $numConta, $datInicio, $datFim, $nomeOriginal, $conteudo
+            ) {
+                // Lock de serialização por associação (quando houver). A associação
+                // sempre existe para imports com idt_associacao, então serve de
+                // ponto de sincronização estável para a chave lógica do OFX.
+                if ($idtAssociacao) {
+                    Associacao::whereKey($idtAssociacao)->lockForUpdate()->first();
+                }
 
-            // Recalcula os totais direto do banco (evita zerar se reimportar arquivo já existente)
-            $qtd = Transacao::where('idt_ofx', $ofx->idt_ofx)->count();
-            $val = Transacao::where('idt_ofx', $ofx->idt_ofx)->where('tip_transacao', 'CREDIT')->sum('val_transacao');
+                // Busca OFX existente pela chave lógica (associação + banco + conta).
+                // O período (dat_inicio/dat_fim) é só metadado: reimportar um recorte
+                // diferente do mesmo contexto deve reconciliar no MESMO registro Ofx.
+                $ofx = Ofx::withoutGlobalScope('associacao')
+                    ->where('idt_associacao', $idtAssociacao)
+                    ->where('cod_banco', $codBanco)
+                    ->where('num_conta', $numConta)
+                    ->lockForUpdate()
+                    ->first();
 
-            $ofx->update([
-                'qtd_transacao' => $qtd,
-                'val_total' => (float) $val,
-            ]);
+                if (! $ofx) {
+                    $ofx = Ofx::create([
+                        'idt_associacao' => $idtAssociacao,
+                        'des_arquivo' => $nomeOriginal,
+                        'cod_banco' => $codBanco,
+                        'num_conta' => $numConta,
+                        'dat_inicio' => $datInicio,
+                        'dat_fim' => $datFim,
+                        'qtd_transacao' => 0,
+                        'val_total' => 0,
+                    ]);
+                } else {
+                    // Atualiza o nome do arquivo para o mais recente
+                    $ofx->update(['des_arquivo' => $nomeOriginal]);
+                }
 
-            $this->gerarResumosMensais($ofx);
+                $this->salvarTransacoes($ofx, $conteudo);
 
-            DB::commit();
+                // Recalcula os totais direto do banco (evita zerar se reimportar arquivo já existente)
+                $qtd = Transacao::where('idt_ofx', $ofx->idt_ofx)->count();
+                $val = Transacao::where('idt_ofx', $ofx->idt_ofx)->where('tip_transacao', 'CREDIT')->sum('val_transacao');
 
-            return $ofx;
+                $ofx->update([
+                    'qtd_transacao' => $qtd,
+                    'val_total' => (float) $val,
+                ]);
 
+                $this->gerarResumosMensais($ofx);
+
+                return $ofx;
+            });
         } catch (\Exception $e) {
-            DB::rollBack();
             Log::error("Erro ao processar OFX [{$nomeOriginal}]: ".$e->getMessage());
             throw $e;
         }
@@ -264,10 +275,17 @@ class OfxParserService
         if ($this->checknumDiscriminante($checknum)) {
             $alvo = $this->normalizarDigitos($checknum);
 
-            return $query->where(function ($q) use ($alvo) {
-                $q->whereRaw("REPLACE(REPLACE(REPLACE(COALESCE(num_transacao, ''), '.', ''), '-', ''), '/', '') = ?", [$alvo])
-                    ->orWhereRaw("REPLACE(REPLACE(REPLACE(COALESCE(num_check, ''), '.', ''), '-', ''), '/', '') = ?", [$alvo]);
-            })->exists();
+            // Compara em PHP para aplicar a mesma normalização "somente dígitos"
+            // do alvo contra num_transacao E num_check gravados. Usar REPLACE em
+            // SQL só cobriria alguns separadores e divergiria do alvo; aqui
+            // qualquer separador (espaço, parênteses etc.) é tratado igual.
+            return $query
+                ->select(['num_transacao', 'num_check'])
+                ->cursor()
+                ->contains(function ($t) use ($alvo) {
+                    return $this->normalizarDigitos($t->num_transacao) === $alvo
+                        || $this->normalizarDigitos($t->num_check) === $alvo;
+                });
         }
 
         return $query
@@ -354,10 +372,26 @@ class OfxParserService
                 && str_contains(mb_strtolower($nomPessoa), mb_strtolower($valMatch)),
             'DES_TRANSACAO' => $desTransacao !== null
                 && str_contains(mb_strtolower($desTransacao), mb_strtolower($valMatch)),
-            'CHECKNUM' => $this->normalizarDigitos($checknum) === $this->normalizarDigitos($valMatch),
+            'CHECKNUM' => $this->checknumCriterioCasa($valMatch, $checknum),
             'TIPO' => $tipo === $valMatch,
             default => false,
         };
+    }
+
+    /**
+     * Compara um critério CHECKNUM contra o CHECKNUM da transação por igualdade
+     * normalizada ("somente dígitos"). Um alvo sem dígitos (ex.: "ABC") normaliza
+     * para vazio e NÃO deve casar transações sem CHECKNUM: nesse caso recusa.
+     */
+    private function checknumCriterioCasa(string $valMatch, ?string $checknum): bool
+    {
+        $alvo = $this->normalizarDigitos($valMatch);
+
+        if ($alvo === '') {
+            return false;
+        }
+
+        return $this->normalizarDigitos($checknum) === $alvo;
     }
 
     /**

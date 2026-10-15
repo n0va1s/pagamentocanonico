@@ -88,6 +88,22 @@ new #[Title('Regras de Classificação')] class extends Component
             'criterios.*.val_match.required' => 'Informe o valor do critério.',
         ]);
 
+        // Um critério CHECKNUM precisa conter ao menos um dígito: um valor sem
+        // dígitos normaliza para vazio e casaria toda transação sem CHECKNUM.
+        foreach ($this->criterios as $index => $criterio) {
+            if (($criterio['tip_match'] ?? null) === 'CHECKNUM'
+                && preg_replace('/\D/', '', (string) ($criterio['val_match'] ?? '')) === '') {
+                $this->addError(
+                    "criterios.{$index}.val_match",
+                    'O CHECKNUM deve conter ao menos um dígito.'
+                );
+            }
+        }
+
+        if ($this->getErrorBag()->isNotEmpty()) {
+            return;
+        }
+
         $regra = $this->associacao->regrasClassificacao()->updateOrCreate(
             ['idt_regra' => $this->regraId],
             [

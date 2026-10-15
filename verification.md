@@ -101,3 +101,51 @@ Aplicação é manual em produção pelo dono; nada aqui roda contra o MySQL.
 ## Conclusão
 
 Verificação integrada OK. Schema sobe limpo em SQLite, teste central passa, suíte sem regressão além do baseline de Vite (14), as 2 de OFX agora passam, e Pint limpo nos arquivos tocados. Nenhuma correção de integração entre as FEATs foi necessária.
+
+---
+
+# Iteração de review — correção dos 4 achados (`.agents/tasks/review.json`)
+
+Verdict do review: `CHANGES_REQUESTED`. Os 4 achados foram corrigidos nesta iteração. Produção **não foi tocada**; schema revalidado em SQLite temporário.
+
+## Achado 1 — Normalização persistida incompleta (confirmado)
+
+`existeNoBanco` comparava o alvo (só dígitos, via `normalizarDigitos`) contra `num_transacao`/`num_check` usando `REPLACE` SQL que removia apenas `.`, `-` e `/`. Separadores como espaço ou parênteses escapavam da dedup.
+
+**Correção** (`app/Services/OfxParserService.php`, `existeNoBanco`): a comparação do CHECKNUM discriminante passou a ser feita em PHP — os candidatos do escopo (associação+banco+conta) são percorridos via `cursor()` e cada `num_transacao`/`num_check` é normalizado com o MESMO `normalizarDigitos` do alvo. Qualquer separador vira igual. Teste novo `dedup por CHECKNUM casa separadores variados em num_transacao e num_check` pré-grava `"12 34"` e `"(56) 78."` e confirma 0 transações novas ao importar `"12-34"` e `"5.6.7.8"`.
+
+## Achado 2 — Critério CHECKNUM vazio após normalização (confirmado)
+
+Um critério CHECKNUM sem dígitos (ex.: `"ABC"`) normalizava para vazio e casava toda transação sem CHECKNUM.
+
+**Correção**:
+- Matcher (`criterioCasa` → novo `checknumCriterioCasa`): alvo normalizado vazio **recusa** o match (retorna `false`).
+- CRUD (`resources/views/pages/associacoes/regras.blade.php`, `salvar`): validação adicional exige ao menos um dígito em critérios `CHECKNUM`, com mensagem "O CHECKNUM deve conter ao menos um dígito."; interrompe o save se houver erro.
+
+Teste novo `critério CHECKNUM sem dígitos não exclui transações sem CHECKNUM` confirma flags `true` para transação sem CHECKNUM mesmo com regra `CHECKNUM = "ABC"` EXCLUI_TUDO.
+
+## Achado 3 — Idempotência concorrente sem garantia (provável)
+
+A busca/criação do OFX e os pares `exists()`/`create()` de transações rodavam sem lock, podendo intercalar entre importações concorrentes.
+
+**Correção** (`processar`): todo o fluxo (busca/criação do OFX, dedup, resumos) corre dentro de UMA `DB::transaction`. A serialização por contexto é feita com `lockForUpdate`: lock na linha da `associacoes` (sempre existe quando há `idt_associacao`) e, quando já existe, na linha do `ofx`. Importações concorrentes do mesmo contexto são serializadas, evitando OFX e transações duplicados. Sem mudança de schema (nenhuma coluna/índice novo) — comportamento visível ao usuário inalterado. Reimport sequencial continua idempotente (testes centrais seguem passando).
+
+## Achado 4 — Matriz de regras e consumidores sem prova (confirmado)
+
+A evidência anterior cobria só `EXCLUI_TUDO` com um critério.
+
+**Correção** (`tests/Feature/OfxClassificacaoDedupTest.php`): adicionados testes com OFX sintético (helper `escreverOfxTemporario`) cobrindo:
+- `EXCLUI_RECEITA` isolado (só a flag de receita zera);
+- `EXCLUI_DESPESA` isolado (só a flag de despesa zera);
+- lógica E com dois critérios (casa só quando ambos batem);
+- regra inativa (não afeta flags);
+- sem regra casando (defaults `true`);
+- smoke das consultas consumidoras: query da tela de despesas (`DEBIT` + `ind_computa_despesa=true` oculta não computáveis) e da receita do dashboard (`val>0` + `ind_computa_receita=true` exclui não computáveis). As telas em si dependem do Vite manifest (baseline), então o smoke é no nível de consulta, independente do manifest.
+
+## Reexecução das verificações
+
+- Schema (`php artisan migrate` em SQLite temporário): **exit 0**, todas as migrations `DONE`.
+- Teste central `OfxClassificacaoDedupTest`: **13 passed** (4 originais + 9 novos).
+- `OfxParserServiceTest`: **2 passed**.
+- Suíte completa `php artisan test`: **14 failed, 37 passed**. As 14 falhas são exatamente o baseline conhecido de `Vite manifest not found` (login, registro, verificação de e-mail, confirmação/reset de senha, dashboard, profile, security, example) — nenhuma regressão nova.
+- `./vendor/bin/pint --test` em `OfxParserService.php` e no teste: **PASS, 2 files**.
