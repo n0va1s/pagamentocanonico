@@ -42,11 +42,12 @@ class OfxParserService
 
         // Todo o fluxo (busca/criação do OFX, dedup e resumos) corre em UMA
         // transação. Importações concorrentes do mesmo contexto são serializadas
-        // por um lock na associação (lockForUpdate), evitando que dois processos
-        // observem a ausência do OFX e criem registros duplicados, ou que pares
-        // exists()/create() de transações se intercalem.
+        // por um lock estável da chave lógica (associação + banco + conta),
+        // evitando que dois processos observem a ausência do OFX e criem
+        // registros duplicados, ou que pares exists()/create() de transações se
+        // intercalem.
         try {
-            return DB::transaction(function () use (
+            return $this->comLockDeContexto($idtAssociacao, $codBanco, $numConta, function () use (
                 $idtAssociacao, $codBanco, $numConta, $datInicio, $datFim, $nomeOriginal, $conteudo
             ) {
                 // Lock de serialização por associação (quando houver). A associação
@@ -104,6 +105,82 @@ class OfxParserService
     }
 
     /**
+     * Executa o fluxo de importação dentro de UMA transação, serializando o
+     * contexto (associação + banco + conta).
+     *
+     * Quando há associação, a própria linha de `associacoes` serve de ponto de
+     * sincronização estável (lockForUpdate dentro da transação). Quando NÃO há
+     * associação (idt_associacao nulo), não existe linha para travar e o OFX
+     * ainda inexistente não pode ser bloqueado com lockForUpdate; então, em
+     * bancos que suportam lock nomeado de sessão (MySQL `GET_LOCK`), adquire-se
+     * um lock advisory na chave lógica `NULL|banco|conta` ANTES de abrir a
+     * transação, serializando o par observar-ausência/criar entre processos
+     * concorrentes. Em SQLite (testes) a escrita já é serializada pelo próprio
+     * banco, então o lock advisory é dispensado sem alterar o comportamento.
+     *
+     * @template TReturn
+     *
+     * @param  callable(): TReturn  $callback
+     * @return TReturn
+     */
+    private function comLockDeContexto(?int $idtAssociacao, ?string $codBanco, ?string $numConta, callable $callback)
+    {
+        // Com associação, o lockForUpdate na transação já serializa o contexto.
+        if ($idtAssociacao) {
+            return DB::transaction($callback);
+        }
+
+        $nomeLock = $this->nomeLockContexto($idtAssociacao, $codBanco, $numConta);
+
+        if (! $this->suportaLockNomeado()) {
+            return DB::transaction($callback);
+        }
+
+        $this->adquirirLockNomeado($nomeLock);
+
+        try {
+            return DB::transaction($callback);
+        } finally {
+            $this->liberarLockNomeado($nomeLock);
+        }
+    }
+
+    /**
+     * Nome determinístico do lock advisory para a chave lógica do OFX. MySQL
+     * limita o nome a 64 caracteres, então usa-se um hash estável da chave.
+     */
+    private function nomeLockContexto(?int $idtAssociacao, ?string $codBanco, ?string $numConta): string
+    {
+        $chave = ($idtAssociacao ?? 'NULL').'|'.($codBanco ?? '').'|'.($numConta ?? '');
+
+        return 'ofx_import_'.sha1($chave);
+    }
+
+    /**
+     * Indica se a conexão suporta lock nomeado de sessão (apenas MySQL/MariaDB).
+     */
+    private function suportaLockNomeado(): bool
+    {
+        return DB::connection()->getDriverName() === 'mysql';
+    }
+
+    /**
+     * Adquire um lock nomeado de sessão (MySQL `GET_LOCK`), bloqueando até obtê-lo.
+     */
+    private function adquirirLockNomeado(string $nome): void
+    {
+        DB::selectOne('SELECT GET_LOCK(?, ?) AS obtido', [$nome, 10]);
+    }
+
+    /**
+     * Libera o lock nomeado de sessão (MySQL `RELEASE_LOCK`).
+     */
+    private function liberarLockNomeado(string $nome): void
+    {
+        DB::selectOne('SELECT RELEASE_LOCK(?) AS liberado', [$nome]);
+    }
+
+    /**
      * Lê o arquivo e normaliza a codificação e quebras de linha.
      */
     private function lerArquivo(string $caminho): string
@@ -134,6 +211,14 @@ class OfxParserService
 
         // Carrega uma única vez as regras ATIVAS da associação (com critérios).
         $regras = $this->carregarRegrasAtivas($ofx->idt_associacao);
+
+        // Índice canônico das transações JÁ gravadas no contexto (associação +
+        // banco + conta), lido UMA vez. Reúne tanto as identidades discriminantes
+        // por CHECKNUM ("chk:<dígitos>", de num_transacao E num_check) quanto as
+        // de negócio ("biz:data|valor|tipo|cpf"). A dedup contra o banco e a dedup
+        // intra-arquivo passam a consultar esse set em memória, e cada criação o
+        // atualiza — evitando revarrer o histórico a cada bloco.
+        $identidadesExistentes = $this->carregarIndiceIdentidades($ofx);
 
         // Set em memória para dedup intra-arquivo pela identidade canônica.
         $vistasNoArquivo = [];
@@ -171,8 +256,10 @@ class OfxParserService
             }
             $vistasNoArquivo[$identidade] = true;
 
-            // Dedup contra o banco (escopo associação + banco + conta).
-            if ($this->existeNoBanco($ofx, $checknum, $datTransacao, $valor, $tipo, $cpf)) {
+            // Dedup contra o banco (escopo associação + banco + conta) via índice
+            // canônico em memória, montado uma única vez e atualizado a cada
+            // criação abaixo.
+            if (isset($identidadesExistentes[$identidade])) {
                 continue;
             }
 
@@ -208,6 +295,14 @@ class OfxParserService
                 'ind_computa_receita' => $flags['ind_computa_receita'],
                 'ind_computa_despesa' => $flags['ind_computa_despesa'],
             ]);
+
+            // Atualiza o índice canônico com as identidades da transação recém
+            // gravada, cobrindo o caso de CHECKNUM discriminante (chk:) e também
+            // a chave de negócio (biz:) a partir dos valores efetivamente
+            // persistidos (FITID em num_transacao e CHECKNUM em num_check).
+            foreach ($this->identidadesDeTransacao($fitid, $checknum, $datTransacao, $valor, $tipo, $cpf) as $id) {
+                $identidadesExistentes[$id] = true;
+            }
 
             $valorTotal += $valor;
             $quantidade++;
@@ -246,6 +341,14 @@ class OfxParserService
             return 'chk:'.$this->normalizarDigitos($checknum);
         }
 
+        return $this->identidadeNegocio($datTransacao, $valor, $tipo, $cpf);
+    }
+
+    /**
+     * Chave de negócio canônica (fallback de dedup): data|valor|tipo|cpf.
+     */
+    private function identidadeNegocio(string $datTransacao, float $valor, ?string $tipo, ?string $cpf): string
+    {
         return 'biz:'.implode('|', [
             $datTransacao,
             number_format($valor, 2, '.', ''),
@@ -255,49 +358,81 @@ class OfxParserService
     }
 
     /**
-     * Verifica se a transação já existe no banco, no escopo associação+banco+conta.
-     * Para CHECKNUM discriminante, casa o CHECKNUM normalizado contra num_transacao
-     * E num_check já gravados (ambos normalizados). Caso contrário, usa a chave de
-     * negócio data+valor+tipo+cpf.
+     * Monta, com UMA leitura, o índice canônico das transações já gravadas no
+     * contexto (associação + banco + conta). As chaves do set são as mesmas
+     * identidades canônicas usadas na importação, de modo que a dedup contra o
+     * banco vira um lookup O(1) em memória em vez de uma varredura por bloco.
+     *
+     * Cada transação persistida contribui com:
+     *  - "chk:<dígitos>" para num_transacao (FITID) e num_check (CHECKNUM),
+     *    quando o valor normalizado é discriminante; e
+     *  - a chave de negócio "biz:data|valor|tipo|cpf".
+     *
+     * Incluir ambos os lados cobre a equivalência "somente dígitos" com qualquer
+     * separador, mantendo o mesmo comportamento do antigo existeNoBanco().
+     *
+     * @return array<string, true>
      */
-    private function existeNoBanco(Ofx $ofx, ?string $checknum, string $datTransacao, float $valor, ?string $tipo, ?string $cpf): bool
+    private function carregarIndiceIdentidades(Ofx $ofx): array
     {
-        $escopo = fn ($q) => $q->where('idt_associacao', $ofx->idt_associacao)
-            ->where('cod_banco', $ofx->cod_banco)
-            ->where('num_conta', $ofx->num_conta);
-
         $query = Transacao::withoutGlobalScope('associacao')
-            ->whereHas('ofx', function ($q) use ($escopo) {
-                $q->withoutGlobalScope('associacao');
-                $escopo($q);
-            });
+            ->whereHas('ofx', function ($q) use ($ofx) {
+                $q->withoutGlobalScope('associacao')
+                    ->where('idt_associacao', $ofx->idt_associacao)
+                    ->where('cod_banco', $ofx->cod_banco)
+                    ->where('num_conta', $ofx->num_conta);
+            })
+            ->select(['num_transacao', 'num_check', 'dat_transacao', 'val_transacao', 'tip_transacao', 'num_cpf_pagador']);
 
-        if ($this->checknumDiscriminante($checknum)) {
-            $alvo = $this->normalizarDigitos($checknum);
+        $indice = [];
 
-            // Compara em PHP para aplicar a mesma normalização "somente dígitos"
-            // do alvo contra num_transacao E num_check gravados. Usar REPLACE em
-            // SQL só cobriria alguns separadores e divergiria do alvo; aqui
-            // qualquer separador (espaço, parênteses etc.) é tratado igual.
-            return $query
-                ->select(['num_transacao', 'num_check'])
-                ->cursor()
-                ->contains(function ($t) use ($alvo) {
-                    return $this->normalizarDigitos($t->num_transacao) === $alvo
-                        || $this->normalizarDigitos($t->num_check) === $alvo;
-                });
+        foreach ($query->cursor() as $t) {
+            $data = $t->dat_transacao instanceof \DateTimeInterface
+                ? $t->dat_transacao->format('Y-m-d')
+                : (string) $t->dat_transacao;
+
+            foreach ($this->identidadesDeTransacao(
+                $t->num_transacao,
+                $t->num_check,
+                $data,
+                (float) $t->val_transacao,
+                $t->tip_transacao,
+                $t->num_cpf_pagador,
+            ) as $id) {
+                $indice[$id] = true;
+            }
         }
 
-        return $query
-            ->whereDate('dat_transacao', $datTransacao)
-            ->where('val_transacao', $valor)
-            ->where('tip_transacao', $tipo)
-            ->when(
-                $cpf !== null,
-                fn ($q) => $q->where('num_cpf_pagador', $cpf),
-                fn ($q) => $q->whereNull('num_cpf_pagador'),
-            )
-            ->exists();
+        return $indice;
+    }
+
+    /**
+     * Deriva TODAS as identidades canônicas sob as quais uma transação
+     * persistida pode ser reconhecida numa importação futura:
+     *  - uma identidade "chk:<dígitos>" para cada coluna discriminante
+     *    (num_transacao=FITID e num_check=CHECKNUM); e
+     *  - sempre a identidade de negócio "biz:data|valor|tipo|cpf".
+     *
+     * O "biz:" entra incondicionalmente porque um bloco recebido SEM CHECKNUM
+     * discriminante casa pela chave de negócio, independentemente de a linha
+     * gravada ter um FITID numérico (discriminante). Assim o índice em memória
+     * reproduz exatamente as duas vias de dedup do antigo existeNoBanco().
+     *
+     * @return array<int, string>
+     */
+    private function identidadesDeTransacao(?string $numTransacao, ?string $numCheck, string $datTransacao, float $valor, ?string $tipo, ?string $cpf): array
+    {
+        $identidades = [
+            $this->identidadeNegocio($datTransacao, $valor, $tipo, $cpf) => true,
+        ];
+
+        foreach ([$numTransacao, $numCheck] as $candidato) {
+            if ($this->checknumDiscriminante($candidato)) {
+                $identidades['chk:'.$this->normalizarDigitos($candidato)] = true;
+            }
+        }
+
+        return array_keys($identidades);
     }
 
     /**

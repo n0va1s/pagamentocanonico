@@ -149,3 +149,57 @@ A evidência anterior cobria só `EXCLUI_TUDO` com um critério.
 - `OfxParserServiceTest`: **2 passed**.
 - Suíte completa `php artisan test`: **14 failed, 37 passed**. As 14 falhas são exatamente o baseline conhecido de `Vite manifest not found` (login, registro, verificação de e-mail, confirmação/reset de senha, dashboard, profile, security, example) — nenhuma regressão nova.
 - `./vendor/bin/pint --test` em `OfxParserService.php` e no teste: **PASS, 2 files**.
+
+---
+
+# Segunda iteração de review — `CHANGES_REQUESTED` (2 achados confirmados)
+
+Verdict: `CHANGES_REQUESTED`. Os 2 achados confirmados foram corrigidos nesta iteração, ambos
+sem alterar o comportamento visível ao usuário nem o schema. Produção (MySQL `pagamento`)
+**não foi tocada**; schema revalidado em SQLite temporário.
+
+## Achado 1 — Importação sem associação não é serializada (confirmado)
+
+`processar(..., null)` corria sem ponto de sincronização: duas importações concorrentes do mesmo
+`NULL|banco|conta` podiam ambas observar a ausência do OFX e ambas criá-lo (o `lockForUpdate` não
+trava linha inexistente e não há restrição única para a chave lógica).
+
+**Correção** (`app/Services/OfxParserService.php`): a transação de `processar` passou a rodar dentro
+de `comLockDeContexto()`. Com associação, o `lockForUpdate` na linha de `associacoes` continua sendo
+o ponto estável de serialização (inalterado). Sem associação, antes de abrir a transação adquire-se
+um **lock advisory de sessão** na chave `NULL|banco|conta` (`GET_LOCK`/`RELEASE_LOCK`, MySQL/produção),
+serializando o par observar-ausência/criar entre processos concorrentes; o nome do lock é um hash
+estável da chave (cabe no limite de 64 chars do MySQL). Em SQLite (testes) a escrita já é serializada
+pelo próprio banco, então o lock advisory é dispensado por verificação de driver — nenhum efeito
+observável muda. Assinatura pública, schema e caminho com associação permanecem iguais; a decisão de
+tornar a associação obrigatória (mudança de comportamento) foi evitada e o caminho `null` preservado,
+pois os testes existentes o exercitam.
+
+## Achado 2 — Deduplicação normalizada revarre o histórico (confirmado)
+
+`existeNoBanco()` fazia, para CADA CHECKNUM discriminante, um `cursor()` sobre todas as transações do
+contexto (custo ~`N × H`).
+
+**Correção** (`app/Services/OfxParserService.php`): removido `existeNoBanco()`. O importador agora
+monta UMA vez, por importação, um **índice canônico em memória** (`carregarIndiceIdentidades()`) com
+as identidades das transações já gravadas no contexto — lido com um único `cursor()`. A dedup contra
+o banco virou um lookup O(1) nesse set, e cada criação atualiza o índice via `identidadesDeTransacao()`.
+Cada transação persistida contribui com: `chk:<dígitos>` de `num_transacao` (FITID) e `num_check`
+(CHECKNUM) quando discriminantes, e **sempre** a chave de negócio `biz:data|valor|tipo|cpf` — o `biz:`
+é incondicional porque um bloco recebido sem CHECKNUM discriminante casa pela chave de negócio
+independentemente de a linha gravada ter FITID numérico. O lado de consulta (`identidadeCanonica()`)
+é inalterado: discriminante consulta só `chk:`, não-discriminante só `biz:`. Isso reproduz exatamente
+as duas vias do antigo `existeNoBanco()`, reduzindo o trabalho a uma leitura do histórico mais uma
+passagem pelo arquivo. Custo passa de ~`N × H` para ~`H + N`.
+
+## Reexecução das verificações (segunda iteração)
+
+- Schema (`php artisan migrate` em SQLite temporário via env inline; produção intocada): **exit 0**,
+  todas as migrations `DONE`.
+- Teste central `OfxClassificacaoDedupTest`: **13 passed** (inclui idempotência de reimport, recorte
+  sobreposto, separadores variados na dedup e matriz de regras).
+- `OfxParserServiceTest`: **2 passed** (parse correto + reimport sem duplicar).
+- Suíte completa `php artisan test`: **14 failed, 37 passed** — as 14 falhas são exatamente o baseline
+  conhecido `Vite manifest not found` (login, registro, verificação/confirmação/reset de senha,
+  dashboard, profile, security, example); nenhuma falha fora de `manifest`. Sem regressão nova.
+- `./vendor/bin/pint --test app/Services/OfxParserService.php`: **PASS, 1 file**.
