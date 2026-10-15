@@ -29,11 +29,15 @@ class Transacao extends Model
         'num_check',
         'nom_pessoa',
         'num_cpf_pagador',
+        'ind_computa_receita',
+        'ind_computa_despesa',
     ];
 
     protected $casts = [
         'dat_transacao' => 'date',
         'val_transacao' => 'decimal:2',
+        'ind_computa_receita' => 'boolean',
+        'ind_computa_despesa' => 'boolean',
     ];
 
     public function ofx(): BelongsTo
