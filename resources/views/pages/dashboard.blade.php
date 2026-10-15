@@ -545,10 +545,23 @@ new #[Title('Dashboard')] class extends Component {
             $dadosDashboard[] = $linha;
         }
 
+        // Indicador de duplicidades pendentes (Req 9.2/9.3/9.4).
+        $duplicidadesPendentes = null;
+        $associacaoIndicador = $isAdmin ? $this->selectedAssociacaoId : $user->getMembroAssociacaoId();
+        if ($associacaoIndicador !== null) {
+            try {
+                $duplicidadesPendentes = app(\App\Services\AuditoriaService::class)->contarPendentes((int) $associacaoIndicador);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Falha ao contar duplicidades pendentes: '.$e->getMessage());
+                $duplicidadesPendentes = null;
+            }
+        }
+
         $selectedAssociacao = $this->selectedAssociacaoId ? \App\Models\Associacao::find($this->selectedAssociacaoId) : null;
 
         return [
             'isMembroDashboard' => false,
+            'duplicidadesPendentes' => $duplicidadesPendentes,
             'isAdminDashboard' => $isAdminDashboard,
             'isDiretor' => $user->isDiretor(),
             'isAdmin' => $isAdmin,
@@ -846,6 +859,25 @@ new #[Title('Dashboard')] class extends Component {
                         </button>
                     </div>
                 </div>
+
+                {{-- Indicador de duplicidades pendentes de auditoria (Req 9.2/9.3) --}}
+                @if($duplicidadesPendentes > 0)
+                    <a href="{{ route('auditoria') }}" wire:navigate
+                        class="flex items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-sm dark:border-amber-700 dark:bg-amber-900/20 mb-6 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition">
+                        <div class="flex items-center gap-3">
+                            <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-900/40">
+                                <flux:icon name="shield-exclamation" class="size-5" />
+                            </div>
+                            <div>
+                                <p class="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                                    {{ $duplicidadesPendentes }} duplicidade(s) pendente(s) de auditoria
+                                </p>
+                                <p class="text-xs text-amber-700 dark:text-amber-400">Clique para revisar e corrigir no relatório de auditoria.</p>
+                            </div>
+                        </div>
+                        <flux:icon name="chevron-right" class="size-5 text-amber-600" />
+                    </a>
+                @endif
 
                 <!-- Cards de Estatísticas Unificados -->
                 <div x-show="showCards" style="display: none;" class="grid auto-rows-min gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6 mb-6">

@@ -1,8 +1,3 @@
----
-name: design_system
-description: Guidelines and patterns for the application's user interface design (Design System) to ensure visual consistency across all listing, dashboard, and form pages.
----
-
 # UI Design System Guidelines
 
 This document serves as the guide for refactoring and creating pages. It details structural layout patterns, typography, components, and coding conventions to ensure UI consistency, mobile-first design, and high accessibility.

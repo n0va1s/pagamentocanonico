@@ -8,6 +8,7 @@ use Livewire\WithFileUploads;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 
 new class extends Component {
     use WithFileUploads;
@@ -34,7 +35,6 @@ new class extends Component {
 
     public function updatedIdtAssociacao()
     {
-        // Reset state when association changes
         $this->processado = false;
         $this->transacoes = [];
         $this->vinculos = [];
@@ -79,7 +79,6 @@ new class extends Component {
 
             $conteudo = file_get_contents($tempPath);
 
-            // Normalizar encoding
             if (!str_contains($conteudo, 'ENCODING:UTF-8') && !mb_check_encoding($conteudo, 'UTF-8')) {
                 $conteudo = mb_convert_encoding($conteudo, 'UTF-8', 'ISO-8859-1');
             }
@@ -89,7 +88,6 @@ new class extends Component {
 
             foreach ($blocos as $bloco) {
                 $valor = (float) str_replace(',', '.', $bloco['TRNAMT'] ?? '0');
-                // Processar apenas créditos/recebimentos positivos
                 if (($bloco['TRNTYPE'] ?? '') !== 'CREDIT' || $valor <= 0) {
                     continue;
                 }
@@ -97,10 +95,9 @@ new class extends Component {
                 $fitid = trim($bloco['FITID'] ?? '');
                 $name = trim($bloco['NAME'] ?? '');
 
-                // Ignorar linhas informativas de saldo
-                if ($fitid === '' || 
-                    str_contains(strtolower($name), 'saldo anterior') || 
-                    str_contains(strtolower($name), 'saldo do dia') || 
+                if ($fitid === '' ||
+                    str_contains(strtolower($name), 'saldo anterior') ||
+                    str_contains(strtolower($name), 'saldo do dia') ||
                     str_contains(strtolower($name), 'saldo anterior/atual')) {
                     continue;
                 }
@@ -108,11 +105,9 @@ new class extends Component {
                 $datTransacao = $this->converterDataOfx($bloco['DTPOSTED'] ?? null);
                 $memo = $bloco['MEMO'] ?? '';
 
-                // Extrair CPF e nome limpo do MEMO
                 $cpf = $parser->extrairCpfDoMemo($memo);
                 $nomePagador = $this->limparDescricao($memo);
 
-                // Buscar membro da associação selecionada
                 $membro = null;
                 if ($cpf) {
                     $membro = Membro::withoutGlobalScopes()
@@ -162,45 +157,80 @@ new class extends Component {
             return;
         }
 
-        DB::beginTransaction();
+        // Reatribuicao manual de membros em transacao curta e isolada (antes do loop).
         try {
-            // Atualiza os membros que foram manualmente vinculados
-            foreach ($this->transacoes as $t) {
-                $idx = $t['index'];
-                $selectedMembroId = $this->vinculos[$idx] ?? null;
-                $extractedCpf = $t['cpf'];
+            DB::transaction(function () {
+                foreach ($this->transacoes as $t) {
+                    $idx = $t['index'];
+                    $selectedMembroId = $this->vinculos[$idx] ?? null;
+                    $extractedCpf = $t['cpf'];
 
-                if ($selectedMembroId && $extractedCpf) {
-                    $membro = Membro::withoutGlobalScopes()->find($selectedMembroId);
-                    if ($membro) {
-                        // Atualiza com o CPF extraído do extrato formatado
-                        $membro->update(['num_cpf_membro' => \App\Services\CpfService::format($extractedCpf)]);
+                    if ($selectedMembroId && $extractedCpf) {
+                        $membro = Membro::withoutGlobalScopes()->find($selectedMembroId);
+                        if ($membro) {
+                            $membro->update(['num_cpf_membro' => \App\Services\CpfService::format($extractedCpf)]);
+                        }
                     }
                 }
-            }
+            });
+        } catch (\Throwable $e) {
+            Log::error('Falha ao vincular membros no upload OFX: '.$e->getMessage());
+        }
 
-            // Invoca o parser para persistir cada arquivo no banco
-            $parser = app(OfxParserService::class);
-            $totalImported = 0;
-            $lastOfxId = null;
+        // Cada processar() e atomico por arquivo; a falha de um nao derruba os demais.
+        $parser = app(OfxParserService::class);
+        $resultados = [];
+        $lastOfxId = null;
 
-            foreach ($this->tempPaths as $idx => $tempPath) {
+        foreach ($this->tempPaths as $idx => $tempPath) {
+            $nome = $this->originalNames[$idx];
+            try {
+                $ofx = $parser->processar($tempPath, $nome, $this->idt_associacao);
+                $resultado = ['nome' => $nome] + ($ofx->resultadoImportacao ?? ['status' => 'criado', 'novas' => 0, 'jaExistentes' => 0, 'fitidInvalidos' => 0]);
+                $resultados[] = $resultado;
+                $lastOfxId = $ofx->idt_ofx;
+            } catch (\Throwable $e) {
+                Log::error("Falha ao importar {$nome}: ".$e->getMessage());
+                $resultados[] = ['nome' => $nome, 'status' => 'erro', 'novas' => 0, 'jaExistentes' => 0, 'fitidInvalidos' => 0];
+            } finally {
                 if (File::exists($tempPath)) {
-                    $ofx = $parser->processar($tempPath, $this->originalNames[$idx], $this->idt_associacao);
-                    $totalImported += $ofx->qtd_transacao;
-                    $lastOfxId = $ofx->idt_ofx;
                     File::delete($tempPath);
                 }
             }
+        }
 
-            DB::commit();
+        // Notificacoes por arquivo, por status (pt-BR).
+        foreach ($resultados as $r) {
+            $nome = $r['nome'];
+            $novas = $r['novas'] ?? 0;
+            $fitidInvalidos = $r['fitidInvalidos'] ?? 0;
 
-            session()->flash('success', "Arquivos processados com sucesso! {$totalImported} transações importadas.");
+            switch ($r['status']) {
+                case 'criado':
+                    \Flux::toast(variant: 'success', text: "{$nome}: importado — {$novas} transações adicionadas.");
+                    break;
+                case 'reconciliado':
+                    if ($novas > 0) {
+                        \Flux::toast(variant: 'success', text: "{$nome}: {$novas} novo(s) pagamento(s) adicionado(s).");
+                    } else {
+                        \Flux::toast(variant: 'warning', text: "{$nome}: nenhum pagamento novo. Dados já estavam atualizados.");
+                    }
+                    break;
+                case 'ja_atualizado':
+                    \Flux::toast(variant: 'warning', text: "{$nome}: arquivo já importado anteriormente. Nada a atualizar.");
+                    break;
+                case 'erro':
+                    \Flux::toast(variant: 'danger', text: "{$nome}: falha ao importar. Os demais arquivos foram processados.");
+                    break;
+            }
+
+            if ($fitidInvalidos > 0) {
+                \Flux::toast(variant: 'warning', text: "{$nome}: {$fitidInvalidos} lançamento(s) ignorado(s) por ausência de identificador (FITID).");
+            }
+        }
+
+        if ($lastOfxId) {
             return $this->redirectRoute('dashboard', ['ofx' => $lastOfxId], navigate: true);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            session()->flash('error', 'Erro ao importar dados: ' . $e->getMessage());
         }
     }
 
@@ -264,7 +294,7 @@ new class extends Component {
     {
         return [
             'associacoes' => Associacao::orderBy('nom_associacao')->get(),
-            'membros' => $this->idt_associacao 
+            'membros' => $this->idt_associacao
                 ? Membro::withoutGlobalScopes()->where('idt_associacao', $this->idt_associacao)->orderBy('nom_membro')->get()
                 : collect(),
         ];
@@ -272,6 +302,11 @@ new class extends Component {
 }; ?>
 
 <div class="space-y-6 p-6 max-w-7xl mx-auto">
+    {{-- Toasts --}}
+    <flux:toast.group>
+        <flux:toast />
+    </flux:toast.group>
+
     {{-- Header --}}
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -283,15 +318,6 @@ new class extends Component {
             </p>
         </div>
     </div>
-
-    {{-- Alerts --}}
-    @if(session('error'))
-        <flux:callout variant="danger" icon="exclamation-triangle" heading="{{ session('error') }}" />
-    @endif
-
-    @if(session('success'))
-        <flux:callout variant="success" icon="check-circle" heading="{{ session('success') }}" />
-    @endif
 
     <div class="grid grid-cols-1 gap-6">
         {{-- Form Card --}}

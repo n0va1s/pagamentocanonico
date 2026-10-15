@@ -20,6 +20,8 @@ class Resumo extends Model
     protected $fillable = [
         'idt_ofx',
         'idt_membro',
+        'nom_pessoa',
+        'chv_pessoa',
         'num_ano',
         'num_mes',
         'nom_mes',

@@ -21,6 +21,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Volt::route('/upload', 'pages.ofx.upload')->name('upload');
 
+        Volt::route('/auditoria', 'pages.auditoria')->name('auditoria');
+
         Volt::route('/membros', 'pages.membros.index')->name('membros.index');
         Volt::route('/membros/novo', 'pages.membros.create')->name('membros.create');
         Volt::route('/membros/{membro}/editar', 'pages.membros.edit')->name('membros.edit');

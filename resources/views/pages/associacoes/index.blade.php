@@ -1,18 +1,19 @@
 <?php
 
 use App\Models\Associacao;
+use Livewire\Attributes\Title;
 use Livewire\Volt\Component;
 use Livewire\WithPagination;
-use Livewire\Attributes\Title;
 
-new #[Title('Cadastro de Associações')] class extends Component {
+new #[Title('Cadastro de Associações')] class extends Component
+{
     use WithPagination;
 
     public string $busca = '';
 
     public function mount(): void
     {
-        if (!auth()->user()->isAdmin()) {
+        if (! auth()->user()->isAdmin()) {
             abort(403, 'Acesso não autorizado.');
         }
     }
@@ -27,15 +28,14 @@ new #[Title('Cadastro de Associações')] class extends Component {
         $assoc = Associacao::findOrFail($id);
         $assoc->delete();
 
-        \Flux::toast(variant: 'success', text: __('messages.alerts.success.deleted'));
+        Flux::toast(variant: 'success', text: __('messages.alerts.success.deleted'));
     }
 
     public function with(): array
     {
         $associacoes = Associacao::query()
             ->withCount('membros')
-            ->when($this->busca, fn ($q) =>
-                $q->where('nom_associacao', 'like', "%{$this->busca}%")
+            ->when($this->busca, fn ($q) => $q->where('nom_associacao', 'like', "%{$this->busca}%")
             )
             ->orderBy('nom_associacao')
             ->paginate(10);
@@ -105,6 +105,7 @@ new #[Title('Cadastro de Associações')] class extends Component {
                             </div>
                         </div>
                         <div class="flex gap-1 flex-shrink-0">
+                            <flux:button wire:navigate href="{{ route('auditoria', ['associacao' => $assoc->idt_associacao]) }}" size="sm" variant="ghost" icon="shield-exclamation" class="text-amber-600 hover:text-amber-700" aria-label="Auditoria de duplicidades" />
                             <flux:button wire:navigate href="{{ route('associacoes.edit', $assoc) }}" size="sm" variant="ghost" icon="pencil" aria-label="Editar associação" />
                             <flux:button wire:click="excluirAssociacao({{ $assoc->idt_associacao }})" wire:confirm="Deseja remover esta associação?" size="sm" variant="ghost" icon="trash" class="text-red-500 hover:text-red-700" aria-label="Remover associação" />
                         </div>

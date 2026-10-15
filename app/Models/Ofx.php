@@ -20,6 +20,7 @@ class Ofx extends Model
     protected $fillable = [
         'idt_associacao',
         'des_arquivo',
+        'hash_arquivo',
         'cod_banco',
         'num_conta',
         'dat_inicio',

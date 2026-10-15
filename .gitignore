@@ -22,5 +22,12 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
+/.kiro
 *.ofx
+
+# Artefato de build de produção (gerado por scripts/preparar-build-producao.sh)
+/projeto-producao.zip
+
+# Logs temporários de depuração
+_*.log
 
