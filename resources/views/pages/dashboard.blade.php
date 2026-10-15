@@ -1,32 +1,51 @@
 <?php
 
+use App\Enums\Perfil;
+use App\Models\Associacao;
+use App\Models\Contato;
 use App\Models\Membro;
 use App\Models\Ofx;
 use App\Models\Resumo;
 use App\Models\Transacao;
-
-use Livewire\Volt\Component;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Livewire\Attributes\Title;
+use Livewire\Volt\Component;
 
-new #[Title('Dashboard')] class extends Component {
+new #[Title('Dashboard')] class extends Component
+{
     public ?int $selectedImportId = null;
+
     public $selectedAssociacaoId = null;
+
     public ?int $selectedYear = null;
+
     public ?int $selectedMonth = null;
 
     // Member properties
     public string $activeTab = 'pagamentos';
+
     public string $nom_membro = '';
+
     public ?string $nom_apelido = null;
+
     public ?string $tel_membro = null;
+
     public ?string $end_logradouro = null;
+
     public ?string $end_numero = null;
+
     public ?string $end_complemento = null;
+
     public ?string $des_telegram_chat_id = null;
 
     public string $contactName = '';
+
     public string $contactEmail = '';
+
     public string $contactMessage = '';
+
     public ?int $contactAssociacaoId = null;
 
     public function mount(): void
@@ -59,8 +78,8 @@ new #[Title('Dashboard')] class extends Component {
                 $latest = Ofx::withoutGlobalScope('associacao')->latest()->first();
                 $this->selectedImportId = $latest ? $latest->idt_ofx : null;
             }
-            
-            if (!$user->isAdmin()) {
+
+            if (! $user->isAdmin()) {
                 $this->selectedAssociacaoId = $user->membro?->idt_associacao;
             }
         }
@@ -71,13 +90,12 @@ new #[Title('Dashboard')] class extends Component {
         $this->redirect(route('dashboard', ['import' => $this->selectedImportId]), navigate: true);
     }
 
-
-
     public function updateProfile(): void
     {
         $membro = auth()->user()->membro;
-        if (!$membro) {
-            \Flux::toast(variant: 'danger', text: 'Membro não cadastrado.');
+        if (! $membro) {
+            Flux::toast(variant: 'danger', text: 'Membro não cadastrado.');
+
             return;
         }
         $this->validate([
@@ -98,7 +116,7 @@ new #[Title('Dashboard')] class extends Component {
             'end_complemento' => $this->end_complemento,
             'des_telegram_chat_id' => $this->des_telegram_chat_id,
         ]);
-        \Flux::toast(variant: 'success', text: __('messages.alerts.success.saved'));
+        Flux::toast(variant: 'success', text: __('messages.alerts.success.saved'));
     }
 
     public function submitContact(): void
@@ -110,12 +128,12 @@ new #[Title('Dashboard')] class extends Component {
             'contactEmail' => 'required|email|max:100',
             'contactMessage' => 'required|string|max:1000',
         ];
-        if (!$membro) {
+        if (! $membro) {
             $rules['contactAssociacaoId'] = 'nullable';
         }
         $this->validate($rules);
 
-        \App\Models\Contato::create([
+        Contato::create([
             'nome' => $this->contactName,
             'email' => $this->contactEmail,
             'mensagem' => $this->contactMessage,
@@ -126,25 +144,25 @@ new #[Title('Dashboard')] class extends Component {
         $chatId = config('services.telegram.contact_chat_id') ?: env('TELEGRAM_CONTACT_CHAT_ID', '');
         $enviouTelegram = false;
         if (filled($botToken) && filled($chatId)) {
-            $texto = "📩 <b>Nova Mensagem de Contato</b>\n" .
-                     "👤 <b>Nome:</b> {$this->contactName}\n" .
-                     "✉️ <b>E-mail:</b> {$this->contactEmail}\n" .
+            $texto = "📩 <b>Nova Mensagem de Contato</b>\n".
+                     "👤 <b>Nome:</b> {$this->contactName}\n".
+                     "✉️ <b>E-mail:</b> {$this->contactEmail}\n".
                      "💬 <b>Mensagem:</b>\n{$this->contactMessage}";
             try {
-                $response = \Illuminate\Support\Facades\Http::post("https://api.telegram.org/bot{$botToken}/sendMessage", [
+                $response = Http::post("https://api.telegram.org/bot{$botToken}/sendMessage", [
                     'chat_id' => $chatId,
                     'text' => $texto,
-                    'parse_mode' => 'HTML'
+                    'parse_mode' => 'HTML',
                 ]);
                 $enviouTelegram = $response->successful();
-            } catch (\Exception $e) {
+            } catch (Exception $e) {
                 // ignore
             }
         }
         if ($enviouTelegram) {
-            \Flux::toast(variant: 'success', text: 'Mensagem enviada com sucesso!');
+            Flux::toast(variant: 'success', text: 'Mensagem enviada com sucesso!');
         } else {
-            \Flux::toast(variant: 'warning', text: 'Mensagem registrada. (Falha temporária ao enviar ao Telegram)');
+            Flux::toast(variant: 'warning', text: 'Mensagem registrada. (Falha temporária ao enviar ao Telegram)');
         }
         $this->reset(['contactMessage']);
     }
@@ -152,13 +170,14 @@ new #[Title('Dashboard')] class extends Component {
     public function atualizarPagamentos(): void
     {
         $user = auth()->user();
-        if (!$user->isAdmin() && !$user->isDiretor()) {
-            \Flux::toast(variant: 'danger', text: 'Sem permissão.');
+        if (! $user->isAdmin() && ! $user->isDiretor()) {
+            Flux::toast(variant: 'danger', text: 'Sem permissão.');
+
             return;
         }
 
         $associacaoId = $this->selectedAssociacaoId;
-        $membrosQuery = \App\Models\Membro::query();
+        $membrosQuery = Membro::query();
         if ($associacaoId) {
             $membrosQuery->where('idt_associacao', $associacaoId);
         }
@@ -167,16 +186,16 @@ new #[Title('Dashboard')] class extends Component {
         $totalResumosAfetados = 0;
         $totalTransacoesAfetadas = 0;
 
-        \Illuminate\Support\Facades\DB::beginTransaction();
+        DB::beginTransaction();
         try {
             foreach ($membros as $membro) {
                 $membroCpf = $membro->num_cpf_membro ? preg_replace('/\D/', '', $membro->num_cpf_membro) : null;
-                
-                if (!$membroCpf) {
+
+                if (! $membroCpf) {
                     continue; // Pula membros sem CPF, já que a busca é estrita
                 }
 
-                $transacoesQuery = \App\Models\Transacao::withoutGlobalScope('associacao')
+                $transacoesQuery = Transacao::withoutGlobalScope('associacao')
                     ->whereNull('idt_membro')
                     ->when($membro->idt_associacao, function ($q) use ($membro) {
                         $q->whereHas('ofx', function ($ofxQ) use ($membro) {
@@ -197,19 +216,19 @@ new #[Title('Dashboard')] class extends Component {
 
                 $idtResumos = $transacoes->pluck('idt_resumo')->filter()->unique();
                 if ($idtResumos->isNotEmpty()) {
-                    $afetadosResumo = \App\Models\Resumo::withoutGlobalScope('associacao')
+                    $afetadosResumo = Resumo::withoutGlobalScope('associacao')
                         ->whereIn('idt_resumo', $idtResumos)
                         ->update(['idt_membro' => $membro->idt_membro]);
-                    
+
                     $totalResumosAfetados += $afetadosResumo;
                 }
             }
 
-            \Illuminate\Support\Facades\DB::commit();
-            \Flux::toast(variant: 'success', text: "Atualização concluída: {$totalTransacoesAfetadas} transações vinculadas.");
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\DB::rollBack();
-            \Flux::toast(variant: 'danger', text: "Erro ao atualizar pagamentos: " . $e->getMessage());
+            DB::commit();
+            Flux::toast(variant: 'success', text: "Atualização concluída: {$totalTransacoesAfetadas} transações vinculadas.");
+        } catch (Exception $e) {
+            DB::rollBack();
+            Flux::toast(variant: 'danger', text: 'Erro ao atualizar pagamentos: '.$e->getMessage());
         }
     }
 
@@ -223,39 +242,40 @@ new #[Title('Dashboard')] class extends Component {
             $resumosRegularizados = collect();
             if ($membro) {
                 $todosResumos = Resumo::where('idt_membro', $membro->idt_membro)
-                ->orderByDesc('num_ano')
-                ->orderByDesc('num_mes')
-                ->get();
+                    ->orderByDesc('num_ano')
+                    ->orderByDesc('num_mes')
+                    ->get();
 
                 $resumosPendentes = $todosResumos->where('ind_pago', false);
                 $resumosRegularizados = $todosResumos->where('ind_pago', true);
             }
+
             return [
                 'isMembroDashboard' => true,
                 'membro' => $membro,
                 'todosResumos' => $todosResumos ?? collect(),
                 'resumosPendentes' => $resumosPendentes,
                 'resumosRegularizados' => $resumosRegularizados,
-                'associacoes' => \App\Models\Associacao::orderBy('nom_associacao')->get(),
+                'associacoes' => Associacao::orderBy('nom_associacao')->get(),
             ];
         }
 
         $isAdmin = $user->isAdmin();
         $isManager = $isAdmin || $user->isDiretor();
-        $isAdminDashboard = $isAdmin && !$user->isDiretor();
+        $isAdminDashboard = $isAdmin && ! $user->isDiretor();
 
-        if (!$isAdmin) {
+        if (! $isAdmin) {
             $this->selectedAssociacaoId = $user->membro?->idt_associacao;
         }
 
         // Anos disponíveis baseados em transações
         $yearsQuery = Transacao::query();
         if ($this->selectedAssociacaoId) {
-            $yearsQuery->whereHas('ofx', function($q) {
+            $yearsQuery->whereHas('ofx', function ($q) {
                 $q->withoutGlobalScope('associacao')->where('idt_associacao', $this->selectedAssociacaoId);
             });
         } else {
-            $yearsQuery->whereHas('ofx', function($q) {
+            $yearsQuery->whereHas('ofx', function ($q) {
                 $q->withoutGlobalScope('associacao');
             });
         }
@@ -264,7 +284,7 @@ new #[Title('Dashboard')] class extends Component {
             ->distinct()
             ->whereNotNull('dat_transacao')
             ->pluck('year')
-            ->map(fn($y) => (int) $y)
+            ->map(fn ($y) => (int) $y)
             ->sortDesc()
             ->values();
 
@@ -272,7 +292,7 @@ new #[Title('Dashboard')] class extends Component {
             $years = collect([(int) date('Y')]);
         }
 
-        if (!$this->selectedYear || !$years->contains($this->selectedYear)) {
+        if (! $this->selectedYear || ! $years->contains($this->selectedYear)) {
             $this->selectedYear = $years->first();
         }
         $selectedYear = $this->selectedYear;
@@ -280,11 +300,11 @@ new #[Title('Dashboard')] class extends Component {
         // Meses disponíveis com transações no ano selecionado
         $monthsQuery = Transacao::query();
         if ($this->selectedAssociacaoId) {
-            $monthsQuery->whereHas('ofx', function($q) {
+            $monthsQuery->whereHas('ofx', function ($q) {
                 $q->withoutGlobalScope('associacao')->where('idt_associacao', $this->selectedAssociacaoId);
             });
         } else {
-            $monthsQuery->whereHas('ofx', function($q) {
+            $monthsQuery->whereHas('ofx', function ($q) {
                 $q->withoutGlobalScope('associacao');
             });
         }
@@ -293,11 +313,11 @@ new #[Title('Dashboard')] class extends Component {
             ->distinct()
             ->whereNotNull('dat_transacao')
             ->pluck('month')
-            ->map(fn($m) => (int) $m)
+            ->map(fn ($m) => (int) $m)
             ->sort()
             ->values();
 
-        if ($this->selectedMonth && !$availableMonths->contains($this->selectedMonth)) {
+        if ($this->selectedMonth && ! $availableMonths->contains($this->selectedMonth)) {
             $this->selectedMonth = null;
         }
         $selectedMonth = $this->selectedMonth;
@@ -305,11 +325,11 @@ new #[Title('Dashboard')] class extends Component {
         // 1. Transações para Total Recebido, Total Pago (Despesas) e Não Identificado
         $transacoesQuery = Transacao::query();
         if ($this->selectedAssociacaoId) {
-            $transacoesQuery->whereHas('ofx', function($q) {
+            $transacoesQuery->whereHas('ofx', function ($q) {
                 $q->withoutGlobalScope('associacao')->where('idt_associacao', $this->selectedAssociacaoId);
             });
         } else {
-            $transacoesQuery->whereHas('ofx', function($q) {
+            $transacoesQuery->whereHas('ofx', function ($q) {
                 $q->withoutGlobalScope('associacao');
             });
         }
@@ -322,9 +342,13 @@ new #[Title('Dashboard')] class extends Component {
         $cloneDebitos = clone $transacoesQuery;
         $cloneNaoIdentificados = clone $transacoesQuery;
 
-        $totalRecebido = (float) $cloneCreditos->where('tip_transacao', 'CREDIT')->sum('val_transacao');
-        $totalPagoDespesas = abs((float) $cloneDebitos->where('tip_transacao', 'DEBIT')->sum('val_transacao'));
-        $totalNaoIdentificado = (float) $cloneNaoIdentificados->where('tip_transacao', 'CREDIT')->whereNull('idt_membro')->sum('val_transacao');
+        $totalRecebido = (float) $cloneCreditos->where('tip_transacao', 'CREDIT')->where('ind_computa_receita', true)->sum('val_transacao');
+        $totalPagoDespesas = abs((float) $cloneDebitos->where('tip_transacao', 'DEBIT')->where('ind_computa_despesa', true)->sum('val_transacao'));
+        $totalNaoIdentificado = (float) $cloneNaoIdentificados->where('tip_transacao', 'CREDIT')->where('ind_computa_receita', true)->whereNull('idt_membro')->sum('val_transacao');
+
+        // A tabela de acompanhamento mensal (abaixo) usa os resumos (Resumo), que já são
+        // gerados somente com transações computáveis na importação (FEAT-002), portanto não
+        // precisa de filtro adicional aqui.
 
         // 2. Membros e Adimplência / Inadimplência no Ano
         $membrosQuery = Membro::withoutGlobalScope('associacao')->with('associacao')->where('ind_aprovado', true);
@@ -336,7 +360,7 @@ new #[Title('Dashboard')] class extends Component {
 
         $resumosAno = Resumo::withoutGlobalScope('associacao')->where('num_ano', $selectedYear);
         if ($this->selectedAssociacaoId) {
-            $resumosAno->whereHas('ofx', function($q) {
+            $resumosAno->whereHas('ofx', function ($q) {
                 $q->withoutGlobalScope('associacao')->where('idt_associacao', $this->selectedAssociacaoId);
             });
         }
@@ -353,31 +377,33 @@ new #[Title('Dashboard')] class extends Component {
         $totalIsentos = 0;
 
         foreach ($membrosAtivos as $membro) {
-            $isHonorario = $membro->tip_associado === \App\Enums\Perfil::HONORARIO || $membro->tip_associado?->value === 'honorario';
+            $isHonorario = $membro->tip_associado === Perfil::HONORARIO || $membro->tip_associado?->value === 'honorario';
             if ($isHonorario) {
                 $totalIsentos++;
+
                 continue;
             }
 
             $taxaVigente = $membro->associacao?->getTaxaVigenteEm();
             $valTaxa = (float) ($taxaVigente?->val_taxa ?? 0);
             $valAnual = (float) ($taxaVigente?->val_anual ?? 0);
-            
+
             $pagos = $pagosPorMembro->get($membro->idt_membro, collect());
             $totalPagoAno = (float) $pagos->sum('val_total');
-            
+
             if ($valAnual > 0 && $totalPagoAno >= $valAnual) {
                 $totalAdimplentes++;
+
                 continue;
             }
 
-            $dataAdesao = $membro->dat_adesao ? \Carbon\Carbon::parse($membro->dat_adesao) : $membro->created_at;
-            $dataInicioAssoc = $membro->associacao?->dat_inicio_cobranca 
-                ? \Carbon\Carbon::parse($membro->associacao->dat_inicio_cobranca) 
-                : \Carbon\Carbon::create(2025, 1, 1);
+            $dataAdesao = $membro->dat_adesao ? Carbon::parse($membro->dat_adesao) : $membro->created_at;
+            $dataInicioAssoc = $membro->associacao?->dat_inicio_cobranca
+                ? Carbon::parse($membro->associacao->dat_inicio_cobranca)
+                : Carbon::create(2025, 1, 1);
 
-            $dataInicioObrigacao = ($dataAdesao && $dataAdesao->greaterThan($dataInicioAssoc)) 
-                ? $dataAdesao 
+            $dataInicioObrigacao = ($dataAdesao && $dataAdesao->greaterThan($dataInicioAssoc))
+                ? $dataAdesao
                 : $dataInicioAssoc;
 
             $startYear = (int) $dataInicioObrigacao->format('Y');
@@ -413,16 +439,16 @@ new #[Title('Dashboard')] class extends Component {
         $nomesMeses = [
             1 => 'Janeiro', 2 => 'Fevereiro', 3 => 'Março', 4 => 'Abril',
             5 => 'Maio', 6 => 'Junho', 7 => 'Julho', 8 => 'Agosto',
-            9 => 'Setembro', 10 => 'Outubro', 11 => 'Novembro', 12 => 'Dezembro'
+            9 => 'Setembro', 10 => 'Outubro', 11 => 'Novembro', 12 => 'Dezembro',
         ];
 
         for ($m = 1; $m <= 12; $m++) {
-            $mesesDisponiveis->push((object)[
+            $mesesDisponiveis->push((object) [
                 'num_ano' => $selectedYear,
                 'num_mes' => $m,
-                'nom_mes' => substr($nomesMeses[$m], 0, 3)
+                'nom_mes' => substr($nomesMeses[$m], 0, 3),
             ]);
-            $totaisPorMes[$selectedYear . '-' . $m] = ['total' => 0, 'identificado' => 0];
+            $totaisPorMes[$selectedYear.'-'.$m] = ['total' => 0, 'identificado' => 0];
         }
 
         // Transações Avulsas / Não Identificadas
@@ -439,12 +465,12 @@ new #[Title('Dashboard')] class extends Component {
             foreach ($mesesDisponiveis as $mesRef) {
                 $valor = $resumosAvulsos->where('num_mes', $mesRef->num_mes)->sum('val_total');
                 $linha['meses'][] = [
-                    'key' => $mesRef->num_ano . '-' . $mesRef->num_mes,
+                    'key' => $mesRef->num_ano.'-'.$mesRef->num_mes,
                     'value' => $valor,
                     'has_payment' => $valor > 0,
                 ];
                 $linha['total'] += $valor;
-                $totaisPorMes[$mesRef->num_ano . '-' . $mesRef->num_mes]['total'] += $valor;
+                $totaisPorMes[$mesRef->num_ano.'-'.$mesRef->num_mes]['total'] += $valor;
             }
             $dadosDashboard[] = $linha;
         }
@@ -452,7 +478,7 @@ new #[Title('Dashboard')] class extends Component {
         foreach ($membrosAtivos as $membro) {
             $membroId = $membro->idt_membro;
             $resumosMembro = $resumosAnoCollection->where('idt_membro', $membroId);
-            
+
             $linha = [
                 'nome' => $membro->nom_membro,
                 'membro_id' => $membroId,
@@ -461,19 +487,19 @@ new #[Title('Dashboard')] class extends Component {
                 'total' => 0,
                 'situacao' => 'Adimplente',
             ];
-            
-            $isHonorario = $membro->tip_associado === \App\Enums\Perfil::HONORARIO || $membro->tip_associado?->value === 'honorario';
+
+            $isHonorario = $membro->tip_associado === Perfil::HONORARIO || $membro->tip_associado?->value === 'honorario';
             $taxaVigente = $membro->associacao?->getTaxaVigenteEm();
             $valTaxa = (float) ($taxaVigente?->val_taxa ?? 0);
             $valAnual = (float) ($taxaVigente?->val_anual ?? 0);
 
-            $dataAdesao = $membro->dat_adesao ? \Carbon\Carbon::parse($membro->dat_adesao) : $membro->created_at;
-            $dataInicioAssoc = $membro->associacao?->dat_inicio_cobranca 
-                ? \Carbon\Carbon::parse($membro->associacao->dat_inicio_cobranca) 
-                : \Carbon\Carbon::create(2025, 1, 1);
+            $dataAdesao = $membro->dat_adesao ? Carbon::parse($membro->dat_adesao) : $membro->created_at;
+            $dataInicioAssoc = $membro->associacao?->dat_inicio_cobranca
+                ? Carbon::parse($membro->associacao->dat_inicio_cobranca)
+                : Carbon::create(2025, 1, 1);
 
-            $dataInicioObrigacao = ($dataAdesao && $dataAdesao->greaterThan($dataInicioAssoc)) 
-                ? $dataAdesao 
+            $dataInicioObrigacao = ($dataAdesao && $dataAdesao->greaterThan($dataInicioAssoc))
+                ? $dataAdesao
                 : $dataInicioAssoc;
 
             $startYear = (int) $dataInicioObrigacao->format('Y');
@@ -493,16 +519,16 @@ new #[Title('Dashboard')] class extends Component {
                 $valor = (float) $resumosMembro->where('num_mes', $m)->sum('val_total');
 
                 $linha['meses'][] = [
-                    'key' => $mesRef->num_ano . '-' . $mesRef->num_mes,
+                    'key' => $mesRef->num_ano.'-'.$mesRef->num_mes,
                     'value' => $valor,
                     'has_payment' => $valor > 0,
                 ];
                 $linha['total'] += $valor;
-                
-                $totaisPorMes[$mesRef->num_ano . '-' . $mesRef->num_mes]['total'] += $valor;
-                $totaisPorMes[$mesRef->num_ano . '-' . $mesRef->num_mes]['identificado'] += $valor;
+
+                $totaisPorMes[$mesRef->num_ano.'-'.$mesRef->num_mes]['total'] += $valor;
+                $totaisPorMes[$mesRef->num_ano.'-'.$mesRef->num_mes]['identificado'] += $valor;
             }
-            
+
             $valorEsperado = $mesesDevidos * $valTaxa;
 
             if ($isHonorario) {
@@ -514,7 +540,7 @@ new #[Title('Dashboard')] class extends Component {
             } else {
                 $linha['situacao'] = ($linha['total'] > 0) ? 'Adimplente' : 'Inadimplente';
             }
-            
+
             $dadosDashboard[] = $linha;
         }
 
@@ -523,7 +549,7 @@ new #[Title('Dashboard')] class extends Component {
         foreach ($resumosInativos as $membroId => $resumosMembro) {
             $membroInativo = Membro::withoutGlobalScope('associacao')->find($membroId);
             $linha = [
-                'nome' => ($membroInativo ? $membroInativo->nom_membro : 'Membro Excluído') . ' (Inativo)',
+                'nome' => ($membroInativo ? $membroInativo->nom_membro : 'Membro Excluído').' (Inativo)',
                 'membro_id' => $membroId,
                 'is_member' => true,
                 'meses' => [],
@@ -534,18 +560,18 @@ new #[Title('Dashboard')] class extends Component {
                 $m = $mesRef->num_mes;
                 $valor = $resumosMembro->where('num_mes', $m)->sum('val_total');
                 $linha['meses'][] = [
-                    'key' => $mesRef->num_ano . '-' . $mesRef->num_mes,
+                    'key' => $mesRef->num_ano.'-'.$mesRef->num_mes,
                     'value' => $valor,
                     'has_payment' => $valor > 0,
                 ];
                 $linha['total'] += $valor;
-                $totaisPorMes[$mesRef->num_ano . '-' . $mesRef->num_mes]['total'] += $valor;
-                $totaisPorMes[$mesRef->num_ano . '-' . $mesRef->num_mes]['identificado'] += $valor;
+                $totaisPorMes[$mesRef->num_ano.'-'.$mesRef->num_mes]['total'] += $valor;
+                $totaisPorMes[$mesRef->num_ano.'-'.$mesRef->num_mes]['identificado'] += $valor;
             }
             $dadosDashboard[] = $linha;
         }
 
-        $selectedAssociacao = $this->selectedAssociacaoId ? \App\Models\Associacao::find($this->selectedAssociacaoId) : null;
+        $selectedAssociacao = $this->selectedAssociacaoId ? Associacao::find($this->selectedAssociacaoId) : null;
 
         return [
             'isMembroDashboard' => false,

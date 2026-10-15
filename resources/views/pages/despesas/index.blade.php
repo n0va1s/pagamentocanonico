@@ -1,27 +1,35 @@
 <?php
 
-use App\Models\Transacao;
 use App\Models\Despesa;
+use App\Models\Transacao;
 use Livewire\Volt\Component;
-use Livewire\WithPagination;
 use Livewire\WithFileUploads;
+use Livewire\WithPagination;
 
-new class extends Component {
-    use WithPagination;
+new class extends Component
+{
     use WithFileUploads;
+    use WithPagination;
 
     public $selectedTransacaoId = null;
+
     public string $selectedAssociacaoId = '';
+
     public ?int $selectedYear = null;
+
     public ?int $selectedMonth = null;
+
     public $file1;
+
     public $file2;
+
     public $file3;
+
     public $filePagamento;
 
     public function mount(): void
     {
-        if (!auth()->user()->isAdmin()) {
+        if (! auth()->user()->isAdmin()) {
             $this->selectedAssociacaoId = (string) (auth()->user()->membro?->idt_associacao ?? '');
         }
     }
@@ -46,12 +54,12 @@ new class extends Component {
         $user = auth()->user();
         $isAdmin = $user->isAdmin();
 
-        if (!$isAdmin) {
+        if (! $isAdmin) {
             $this->selectedAssociacaoId = (string) ($user->membro?->idt_associacao ?? '');
         }
 
         // Anos disponíveis em despesas/transações de débito
-        $yearsQuery = Transacao::where('tip_transacao', 'DEBIT');
+        $yearsQuery = Transacao::where('tip_transacao', 'DEBIT')->where('ind_computa_despesa', true);
         if ($this->selectedAssociacaoId) {
             $yearsQuery->whereHas('ofx', function ($sub) {
                 $sub->where('idt_associacao', $this->selectedAssociacaoId);
@@ -61,7 +69,7 @@ new class extends Component {
             ->distinct()
             ->whereNotNull('dat_transacao')
             ->pluck('year')
-            ->map(fn($y) => (int) $y)
+            ->map(fn ($y) => (int) $y)
             ->sortDesc()
             ->values();
 
@@ -69,14 +77,14 @@ new class extends Component {
             $availableYears = collect([(int) date('Y')]);
         }
 
-        if ($this->selectedYear && !$availableYears->contains($this->selectedYear)) {
+        if ($this->selectedYear && ! $availableYears->contains($this->selectedYear)) {
             $this->selectedYear = null;
         }
 
         // Meses disponíveis para o ano selecionado
         $availableMonths = collect();
         if ($this->selectedYear) {
-            $monthsQuery = Transacao::where('tip_transacao', 'DEBIT')->whereYear('dat_transacao', $this->selectedYear);
+            $monthsQuery = Transacao::where('tip_transacao', 'DEBIT')->where('ind_computa_despesa', true)->whereYear('dat_transacao', $this->selectedYear);
             if ($this->selectedAssociacaoId) {
                 $monthsQuery->whereHas('ofx', function ($sub) {
                     $sub->where('idt_associacao', $this->selectedAssociacaoId);
@@ -86,11 +94,11 @@ new class extends Component {
                 ->distinct()
                 ->whereNotNull('dat_transacao')
                 ->pluck('month')
-                ->map(fn($m) => (int) $m)
+                ->map(fn ($m) => (int) $m)
                 ->sort()
                 ->values();
 
-            if ($this->selectedMonth && !$availableMonths->contains($this->selectedMonth)) {
+            if ($this->selectedMonth && ! $availableMonths->contains($this->selectedMonth)) {
                 $this->selectedMonth = null;
             }
         } else {
@@ -99,6 +107,7 @@ new class extends Component {
 
         $transacoes = Transacao::with('despesa')
             ->where('tip_transacao', 'DEBIT')
+            ->where('ind_computa_despesa', true)
             ->when($this->selectedAssociacaoId, function ($q) {
                 $q->whereHas('ofx', function ($sub) {
                     $sub->where('idt_associacao', $this->selectedAssociacaoId);
@@ -116,7 +125,7 @@ new class extends Component {
         $nomesMeses = [
             1 => 'Janeiro', 2 => 'Fevereiro', 3 => 'Março', 4 => 'Abril',
             5 => 'Maio', 6 => 'Junho', 7 => 'Julho', 8 => 'Agosto',
-            9 => 'Setembro', 10 => 'Outubro', 11 => 'Novembro', 12 => 'Dezembro'
+            9 => 'Setembro', 10 => 'Outubro', 11 => 'Novembro', 12 => 'Dezembro',
         ];
 
         return [
@@ -156,11 +165,11 @@ new class extends Component {
         $existing = Despesa::where('idt_transacao', $transacao->idt_transacao)->first();
 
         $this->validate([
-            'file1' => ($existing ? 'nullable' : 'required') . '|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'file1' => ($existing ? 'nullable' : 'required').'|file|mimes:pdf,jpg,jpeg,png|max:5120',
             'file2' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
             'file3' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
             'filePagamento' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
-            'selectedTransacaoId' => 'required|exists:transacoes,idt_transacao'
+            'selectedTransacaoId' => 'required|exists:transacoes,idt_transacao',
         ], [
             'file1.required' => 'O primeiro arquivo de despesa é obrigatório.',
             'file1.mimes' => 'O arquivo deve ser PDF, JPG ou PNG.',
@@ -183,7 +192,7 @@ new class extends Component {
         );
 
         $this->closeModal();
-        \Flux::toast(variant: 'success', text: 'Anexos de despesas salvos com sucesso!');
+        Flux::toast(variant: 'success', text: 'Anexos de despesas salvos com sucesso!');
     }
 }; ?>
 
@@ -205,7 +214,7 @@ new class extends Component {
                 <span x-text="showFilters ? 'Ocultar Filtros' : 'Mostrar Filtros'">Mostrar Filtros</span>
             </button>
         </div>
-        
+
         <div x-show="showFilters" style="display: none;">
             <div class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-zinc-900 mb-6">
                 <div class="flex flex-wrap items-center gap-4 w-full sm:w-auto">
@@ -283,6 +292,8 @@ new class extends Component {
                                     @if($t->despesa->arq_despesa_3) <a href="{{ Storage::url($t->despesa->arq_despesa_3) }}" target="_blank" class="text-blue-600 hover:underline text-xs font-medium">D3</a> @endif
                                     @if($t->despesa->arq_pagamento) <a href="{{ Storage::url($t->despesa->arq_pagamento) }}" target="_blank" class="text-emerald-600 hover:underline text-xs font-semibold" title="Comprovante de Pagamento">PAG</a> @endif
                                 </div>
+                            @elseif(trim((string) $t->nom_pessoa) === 'Pix - Enviado')
+                                <flux:badge color="red" size="sm">Documento obrigatório</flux:badge>
                             @else
                                 <flux:badge color="zinc" size="sm">Pendente</flux:badge>
                             @endif
