@@ -29,6 +29,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Volt::route('/associacoes', 'pages.associacoes.index')->name('associacoes.index');
             Volt::route('/associacoes/nova', 'pages.associacoes.create')->name('associacoes.create');
             Volt::route('/associacoes/{associacao}/editar', 'pages.associacoes.edit')->name('associacoes.edit');
+            Volt::route('/associacoes/{associacao}/regras', 'pages.associacoes.regras')->name('associacoes.regras');
         });
     });
 
