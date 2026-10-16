@@ -722,7 +722,7 @@ new #[Title('Dashboard')] class extends Component
                                                 <tbody>
                                                     @foreach($todosResumos as $r)
                                                         <tr>
-                                                            <td style="font-weight:600;color:var(--pc-text)">{{ $r->nom_mes_ano }}</td>
+                                                            <td style="font-weight:600;color:var(--pc-text)">{{ $r->num_mes }}/{{ $r->num_ano }}</td>
                                                             <td>{{ $r->num_ano }}</td>
                                                             <td style="text-align:right;font-weight:600;color:var(--pc-text)">R$ {{ number_format($r->val_total, 2, ',', '.') }}</td>
                                                             <td style="text-align:center">
@@ -752,6 +752,7 @@ new #[Title('Dashboard')] class extends Component
                                 </div>
                                 <div class="pc-card-body">
                                     @if($resumosPendentes->count() > 0)
+                                        @php $totalPendente = $resumosPendentes->sum('val_total'); @endphp
                                         <div style="display:flex;align-items:center;gap:0.875rem">
                                             <div class="pc-stat-icon red" style="width:40px;height:40px;border-radius:9px">
                                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -761,6 +762,17 @@ new #[Title('Dashboard')] class extends Component
                                                 <div style="font-size:1rem;font-weight:700;color:var(--pc-red)">Pendente de pagamento</div>
                                                 <div style="font-size:0.78rem;color:var(--pc-subtle)">{{ $resumosPendentes->count() }} pendência(s)</div>
                                             </div>
+                                        </div>
+                                        <div style="margin-top:0.875rem;padding-top:0.875rem;border-top:1px solid var(--pc-border)">
+                                            <div style="font-size:0.875rem;font-weight:700;color:var(--pc-text);margin-bottom:0.25rem">Realize o pagamento</div>
+                                            <div style="font-size:0.78rem;color:var(--pc-subtle);margin-bottom:0.5rem">Valor total em aberto</div>
+                                            <div style="font-size:1.25rem;font-weight:800;color:var(--pc-red)">R$ {{ number_format($totalPendente, 2, ',', '.') }}</div>
+                                            @if($membro->associacao?->chave_pix)
+                                                <div style="margin-top:0.75rem">
+                                                    <div style="font-size:0.7rem;color:var(--pc-subtle);font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.2rem">Chave PIX para pagamento</div>
+                                                    <div style="font-size:0.8125rem;font-weight:600;color:var(--pc-text);word-break:break-all;user-select:all">{{ $membro->associacao->chave_pix }}</div>
+                                                </div>
+                                            @endif
                                         </div>
                                     @else
                                         <div style="display:flex;align-items:center;gap:0.875rem">
