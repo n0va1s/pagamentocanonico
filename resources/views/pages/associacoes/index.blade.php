@@ -72,7 +72,7 @@ new #[Title('Cadastro de Associações')] class extends Component
                 <span x-text="showFilters ? 'Ocultar Filtros' : 'Mostrar Filtros'">Mostrar Filtros</span>
             </button>
         </div>
-        
+
         <div x-show="showFilters" style="display: none;">
             <flux:card class="flex flex-col sm:flex-row gap-3">
                 <div class="flex-1">
@@ -106,6 +106,7 @@ new #[Title('Cadastro de Associações')] class extends Component
                         </div>
                         <div class="flex gap-1 flex-shrink-0">
                             <flux:button wire:navigate href="{{ route('auditoria', ['associacao' => $assoc->idt_associacao]) }}" size="sm" variant="ghost" icon="shield-exclamation" class="text-amber-600 hover:text-amber-700" aria-label="Auditoria de duplicidades" />
+                            <flux:button wire:navigate href="{{ route('associacoes.regras', $assoc) }}" size="sm" variant="ghost" icon="adjustments-horizontal" aria-label="Regras de classificação" />
                             <flux:button wire:navigate href="{{ route('associacoes.edit', $assoc) }}" size="sm" variant="ghost" icon="pencil" aria-label="Editar associação" />
                             <flux:button wire:click="excluirAssociacao({{ $assoc->idt_associacao }})" wire:confirm="Deseja remover esta associação?" size="sm" variant="ghost" icon="trash" class="text-red-500 hover:text-red-700" aria-label="Remover associação" />
                         </div>

@@ -22,6 +22,23 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
         });
+
+        Schema::create('regras_classificacao', function (Blueprint $table) {
+            $table->id('idt_regra');
+            $table->foreignId('idt_associacao')->constrained('associacoes', 'idt_associacao')->onDelete('cascade');
+            $table->string('nom_regra');
+            $table->string('efeito');
+            $table->boolean('ind_ativo')->default(true);
+            $table->timestamps();
+        });
+
+        Schema::create('regras_classificacao_criterios', function (Blueprint $table) {
+            $table->id('idt_criterio');
+            $table->foreignId('idt_regra')->constrained('regras_classificacao', 'idt_regra')->onDelete('cascade');
+            $table->string('tip_match');
+            $table->string('val_match');
+            $table->timestamps();
+        });
     }
 
     /**
@@ -29,6 +46,8 @@ return new class extends Migration
      */
     public function down(): void
     {
+        Schema::dropIfExists('regras_classificacao_criterios');
+        Schema::dropIfExists('regras_classificacao');
         Schema::dropIfExists('associacoes');
     }
 };

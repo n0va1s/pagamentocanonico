@@ -21,6 +21,8 @@ return new class extends Migration
             $table->string('num_check')->nullable(); // CHECKNUM
             $table->string('nom_pessoa')->nullable(); // NAME (se disponível)
             $table->string('num_cpf_pagador', 14)->nullable();
+            $table->boolean('ind_computa_receita')->default(true);
+            $table->boolean('ind_computa_despesa')->default(true);
             $table->timestamps();
 
             $table->index(['idt_ofx', 'dat_transacao']);
