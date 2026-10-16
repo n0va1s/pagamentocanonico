@@ -27,7 +27,7 @@ return new class extends Migration
             $table->id('idt_regra');
             $table->foreignId('idt_associacao')->constrained('associacoes', 'idt_associacao')->onDelete('cascade');
             $table->string('nom_regra');
-            $table->string('efeito');
+            $table->string('des_efeito');
             $table->boolean('ind_ativo')->default(true);
             $table->timestamps();
         });

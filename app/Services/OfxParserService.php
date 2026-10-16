@@ -549,7 +549,7 @@ class OfxParserService
                 continue;
             }
 
-            $efeito = $regra->efeito;
+            $efeito = $regra->des_efeito;
 
             if ($efeito === EfeitoRegra::EXCLUI_RECEITA || $efeito === EfeitoRegra::EXCLUI_TUDO) {
                 $flags['ind_computa_receita'] = false;

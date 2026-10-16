@@ -19,12 +19,12 @@ class RegraClassificacao extends Model
     protected $fillable = [
         'idt_associacao',
         'nom_regra',
-        'efeito',
+        'des_efeito',
         'ind_ativo',
     ];
 
     protected $casts = [
-        'efeito' => EfeitoRegra::class,
+        'des_efeito' => EfeitoRegra::class,
         'ind_ativo' => 'boolean',
     ];
 

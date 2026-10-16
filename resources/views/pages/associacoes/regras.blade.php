@@ -45,7 +45,7 @@ new #[Title('Regras de Classificação')] class extends Component
 
         $this->regraId = $regra->idt_regra;
         $this->nom_regra = $regra->nom_regra;
-        $this->efeito = $regra->efeito->value;
+        $this->efeito = $regra->des_efeito->value;
         $this->ind_ativo = (bool) $regra->ind_ativo;
         $this->criterios = $regra->criterios
             ->map(fn ($c) => ['tip_match' => $c->tip_match, 'val_match' => $c->val_match])
@@ -108,7 +108,7 @@ new #[Title('Regras de Classificação')] class extends Component
             ['idt_regra' => $this->regraId],
             [
                 'nom_regra' => $dados['nom_regra'],
-                'efeito' => $dados['efeito'],
+                'des_efeito' => $dados['efeito'],
                 'ind_ativo' => $dados['ind_ativo'],
             ],
         );
@@ -201,7 +201,7 @@ new #[Title('Regras de Classificação')] class extends Component
                             </h3>
                             <div class="mt-1 flex flex-wrap items-center gap-1">
                                 <flux:badge size="sm" color="blue" class="font-semibold">
-                                    {{ $regra->efeito->label() }}
+                                    {{ $regra->des_efeito->label() }}
                                 </flux:badge>
                                 <flux:badge size="sm" :color="$regra->ind_ativo ? 'green' : 'zinc'" class="font-semibold">
                                     {{ $regra->ind_ativo ? 'Ativa' : 'Inativa' }}

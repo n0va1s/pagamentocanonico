@@ -81,7 +81,7 @@ function criarRegra(Associacao $assoc, EfeitoRegra $efeito, string $tipMatch, st
     $regra = RegraClassificacao::create([
         'idt_associacao' => $assoc->idt_associacao,
         'nom_regra' => "{$tipMatch}:{$valMatch}",
-        'efeito' => $efeito,
+        'des_efeito' => $efeito,
         'ind_ativo' => $ativo,
     ]);
 
@@ -105,7 +105,7 @@ function criarContextoClassificacao(): Associacao
     $regra = RegraClassificacao::create([
         'idt_associacao' => $associacao->idt_associacao,
         'nom_regra' => 'Rende Fácil',
-        'efeito' => EfeitoRegra::EXCLUI_TUDO,
+        'des_efeito' => EfeitoRegra::EXCLUI_TUDO,
         'ind_ativo' => true,
     ]);
 
@@ -329,7 +329,7 @@ test('regra com dois critérios só casa quando ambos batem (lógica E)', functi
     $regra = RegraClassificacao::create([
         'idt_associacao' => $associacao->idt_associacao,
         'nom_regra' => 'Acme débito',
-        'efeito' => EfeitoRegra::EXCLUI_TUDO,
+        'des_efeito' => EfeitoRegra::EXCLUI_TUDO,
         'ind_ativo' => true,
     ]);
     $regra->criterios()->createMany([

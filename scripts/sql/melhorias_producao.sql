@@ -22,7 +22,7 @@ CREATE TABLE `regras_classificacao` (
     `idt_regra` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     `idt_associacao` BIGINT UNSIGNED NOT NULL,
     `nom_regra` VARCHAR(255) NOT NULL,
-    `efeito` VARCHAR(255) NOT NULL,
+    `des_efeito` VARCHAR(255) NOT NULL,
     `ind_ativo` TINYINT(1) NOT NULL DEFAULT 1,
     `created_at` TIMESTAMP NULL DEFAULT NULL,
     `updated_at` TIMESTAMP NULL DEFAULT NULL,
