@@ -23,3 +23,7 @@
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
 </IfModule>
+
+# PHP session.upload_progress vulnerability mitigation (CVE-2026-109618/109619)
+# This closes one of the two likely paths for the serialize-state cross-request UAF
+php_value session.upload_progress.enabled Off
